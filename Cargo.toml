@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/client",
+  "crates/cli",
+  "crates/auth",
+
+  "examples/firebase-client-example"
+]
