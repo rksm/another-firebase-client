@@ -31,15 +31,15 @@ async fn main() {
 
     // Login using firebase auth REST API
     let signin = EmailSignin::new(&opts.email, &opts.password);
-    let login = signin.login(&config).await.expect("failed to login");
+    let login = signin.send(&config).await.expect("failed to login");
 
-    let uid = login.local_id.clone();
+    let uid = login.uid.clone();
 
     // that's what the firestore and realtime db clients use to make authenticated requests
-    let auth = WebUserAuth { config, login };
+    let auth = Box::new(WebUserAuth::new(config, login));
 
     // the firestore client
-    let client = firebase_client::firestore::FirebaseClient::new(Box::new(auth));
+    let client = firebase_client::firestore::FirebaseClient::new(auth);
 
     // list all coscreens of that user
     let coscreens = client
