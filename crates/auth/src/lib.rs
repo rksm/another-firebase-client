@@ -1,4 +1,6 @@
-//! Use this got get OAuth tokens from Google Cloud service accounts.
+//! Use this got get OAuth tokens from Google Cloud service accounts, connecting
+//! to the gcloud cli and the authentication available through it, or with "end
+//! user" authentication via email/password or other sign-in providers.
 //!
 //! Example usage that generates a `bearer_token` string which can be used as an
 //! Authorization header value:
@@ -13,18 +15,16 @@ pub mod error;
 pub mod scopes;
 
 mod authorization;
-mod gcloud_cli_auth;
+mod cli;
+mod end_user;
 mod service_account;
-mod service_account_auth;
 mod token;
-mod web_user_auth;
 
 pub use authorization::Authorization;
-pub use gcloud_cli_auth::CliAuthorization;
-pub use service_account::GoogleServiceAccount;
-pub use service_account_auth::ServiceAccountAuthorization;
+pub use cli::CliAuthorization;
+pub use end_user::{EmailSignin, WebClientConfig, WebLoginResult, WebUserAuth};
+pub use service_account::{GoogleServiceAccount, ServiceAccountAuthorization};
 pub use token::GToken;
-pub use web_user_auth::{EmailSignin, WebClientConfig, WebLoginResult, WebUserAuth};
 
 pub type GoogleAuth = Box<dyn Authorization + Send>;
 
