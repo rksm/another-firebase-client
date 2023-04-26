@@ -139,7 +139,7 @@ impl ListenRequestBuilder {
         let (control_rx, controller) = CollectionStreamController::new();
         let token = self.client.get_token().await?;
         let req = self.build_req(control_rx);
-        let mut client = get_client(&token).await?;
+        let mut client = get_client(token).await?;
         let res = client.listen(req).await?;
         let inbound = res.into_inner();
         Ok((CollectionStreamState::map_stream(inbound), controller))

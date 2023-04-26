@@ -29,7 +29,7 @@ impl Authorization for CliAuthorization {
         self.project_id.as_str()
     }
 
-    async fn get_token(&self) -> Result<String, GCloudAuthError> {
+    async fn get_token(&self) -> Result<Option<String>, GCloudAuthError> {
         tracing::debug!("[CliAuthorization] attempting to get access token");
         loop {
             match self.info.try_lock() {
@@ -43,7 +43,7 @@ impl Authorization for CliAuthorization {
                     if info.is_expired() {
                         *info = AuthInfo::from_cli()?;
                     }
-                    return Ok(info.access_token.clone());
+                    return Ok(Some(info.access_token.clone()));
                 }
             }
         }

@@ -71,7 +71,7 @@ impl Authorization for ServiceAccountAuthorization {
         self.project_id.as_str()
     }
 
-    async fn get_token(&self) -> Result<String, GCloudAuthError> {
+    async fn get_token(&self) -> Result<Option<String>, GCloudAuthError> {
         tracing::debug!("[ServiceAccountAuthorization] attempting to get a token");
         loop {
             match self.token.try_lock() {
@@ -81,7 +81,7 @@ impl Authorization for ServiceAccountAuthorization {
                     );
                     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                 }
-                Ok(mut token) => break token.refresh_if_necessary().await,
+                Ok(mut token) => break token.refresh_if_necessary().await.map(Some),
             }
         }
     }

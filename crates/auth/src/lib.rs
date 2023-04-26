@@ -22,7 +22,7 @@ mod token;
 
 pub use authorization::Authorization;
 pub use cli::CliAuthorization;
-pub use end_user::{EmailSignin, WebClientConfig, WebLoginResult, WebUserAuth};
+pub use end_user::{EmailSignin, WebClientConfig, WebLoginResult, WebUserAnonAuth, WebUserAuth};
 pub use service_account::{GoogleServiceAccount, ServiceAccountAuthorization};
 pub use token::GToken;
 

@@ -66,8 +66,12 @@ impl Listener {
                 let (_tx2, rx2) = mpsc::channel(1);
 
                 let url = Url::parse(&url)?;
-                let token = rdb_client.auth.get_token().await?;
-                let auth = format!("Bearer {}", token);
+                let auth = rdb_client
+                    .auth
+                    .get_token()
+                    .await?
+                    .map(|t| format!("Bearer {t}"));
+
                 let task = start_http_connection(url, auth, tx, rx2);
 
                 while let Some(evt) = rx.recv().await {
@@ -149,14 +153,19 @@ impl Listener {
 
 fn start_http_connection(
     url: Url,
-    auth: String,
+    auth: Option<String>,
     tx: mpsc::Sender<es::Event>,
     mut rx: mpsc::Receiver<RdbControlMessage>,
 ) -> JoinHandle<Result<(), es::Error>> {
     tokio::spawn(async move {
+        let client = es::Client::for_url(url.as_ref())?;
+        let client = if let Some(auth) = auth {
+            client.header("Authorization", &auth)?
+        } else {
+            client
+        };
         let client = es::Client::for_url(url.as_ref())?
             .header("Accept", "text/event-stream")?
-            .header("Authorization", &auth)?
             .reconnect(
                 es::ReconnectOptions::reconnect(true)
                     .retry_initial(false)

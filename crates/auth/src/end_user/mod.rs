@@ -14,6 +14,36 @@ use tokio::sync::RwLock;
 
 use self::refresh::{RefreshTokenRequest, RefreshTokenResponse};
 
+/// Can be used before a user has logged in to make API requests
+#[derive(Clone, Debug)]
+pub struct WebUserAnonAuth {
+    pub config: WebClientConfig,
+}
+
+impl WebUserAnonAuth {
+    pub fn new(config: WebClientConfig) -> Self {
+        Self { config }
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::Authorization for WebUserAnonAuth {
+    fn project_id(&self) -> &str {
+        &self.config.project_id
+    }
+
+    fn box_clone(&self) -> crate::GoogleAuth {
+        Box::new(self.clone())
+    }
+
+    async fn get_token(&self) -> Result<Option<String>, crate::error::GCloudAuthError> {
+        Ok(None)
+    }
+}
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+/// Login with email and password or another "end-user" authentication method
 #[derive(Clone, Debug)]
 pub struct WebUserAuth {
     pub config: WebClientConfig,
@@ -57,9 +87,9 @@ impl crate::Authorization for WebUserAuth {
         Box::new(self.clone())
     }
 
-    async fn get_token(&self) -> Result<String, crate::error::GCloudAuthError> {
+    async fn get_token(&self) -> Result<Option<String>, crate::error::GCloudAuthError> {
         self.refresh_if_necessary().await?;
-        Ok(self.login.read().await.id_token.clone())
+        Ok(Some(self.login.read().await.id_token.clone()))
     }
 }
 
