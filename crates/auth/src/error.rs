@@ -18,7 +18,7 @@ pub enum GCloudAuthError {
 }
 
 #[derive(Error, Debug)]
-pub enum EmailLoginError {
+pub enum EndUserLoginError {
     #[error("Url parse error: {0}")]
     Url(#[from] url::ParseError),
 

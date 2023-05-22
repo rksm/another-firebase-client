@@ -31,31 +31,36 @@ async fn main() {
 
     // Login using firebase auth REST API
     let signin = EmailSignin::new(&opts.email, &opts.password);
-    let login = signin.login(&config).await.expect("failed to login");
+    let login = signin.send(&config).await.expect("failed to login");
 
-    let uid = login.local_id.clone();
+    let uid = login.uid.clone();
 
     // that's what the firestore and realtime db clients use to make authenticated requests
-    let auth = WebUserAuth { config, login };
+    let auth = Box::new(WebUserAuth::new(config, login));
 
     // the firestore client
-    let client = firebase_client::firestore::FirebaseClient::new(Box::new(auth));
+    let client = firebase_client::firestore::FirebaseClient::new(auth);
 
-    // list all coscreens of that user
-    let coscreens = client
-        .run_query()
-        .from("coscreens")
-        .field_filter("members", ArrayContains, uid)
-        .fetch()
-        .await
-        .expect("failed to run query");
+    loop {
+        // list all coscreens of that user
+        let coscreens = client
+            .run_query()
+            .from("coscreens")
+            .field_filter("members", ArrayContains, &uid)
+            .fetch()
+            .await
+            .expect("failed to run query");
 
-    println!("User {} can access the following CoScreens:", opts.email);
-    for coscreen in coscreens {
-        // Note: types for CoScreen objects are not yet extracted.
-        // Currently they are defined via https://gitlab.com/coscreen/coscreen-backend-rs/blob/master/crates/coscreen-db/src/db/
-        // but that is not yet suitable for client-side consumption
-        let coscreen = Value::convert_doc(coscreen).unwrap();
-        println!("{:#?}", coscreen);
+        println!("User {} can access the following CoScreens:", opts.email);
+
+        for coscreen in coscreens {
+            // Note: types for CoScreen objects are not yet extracted.
+            // Currently they are defined via https://gitlab.com/coscreen/coscreen-backend-rs/blob/master/crates/coscreen-db/src/db/
+            // but that is not yet suitable for client-side consumption
+            let coscreen = Value::convert_doc(coscreen).unwrap();
+            println!("{:#?}", coscreen);
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
     }
 }

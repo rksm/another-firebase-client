@@ -21,21 +21,27 @@ const URL: &str = "https://firestore.googleapis.com";
 const DOMAIN: &str = "firestore.googleapis.com";
 
 pub(crate) async fn get_client(
-    token: &str,
+    token: Option<String>,
 ) -> Result<
     FirestoreClient<
         InterceptedService<Channel, impl FnMut(Request<()>) -> Result<Request<()>, Status>>,
     >,
 > {
+    let auth_header = if let Some(token) = token {
+        let bearer_token = format!("Bearer {}", token);
+        Some(MetadataValue::from_str(&bearer_token)?)
+    } else {
+        None
+    };
+
     let endpoint = Channel::from_static(URL)
         .tls_config(ClientTlsConfig::new().domain_name(DOMAIN))
         .unwrap();
-    let bearer_token = format!("Bearer {}", token);
-    let header_value = MetadataValue::from_str(&bearer_token)?;
     let service =
         FirestoreClient::with_interceptor(endpoint.connect().await?, move |mut req: Request<()>| {
-            req.metadata_mut()
-                .insert("authorization", header_value.clone());
+            if let Some(auth) = &auth_header {
+                req.metadata_mut().insert("authorization", auth.clone());
+            }
             Ok(req)
         });
     Ok(service)
@@ -157,7 +163,8 @@ impl<'a> ListDocumentsOptions<'a> {
             req.page_token = page_token.clone();
         }
 
-        let res = get_client(&token).await?.list_documents(req).await?;
+        let t = token.as_ref();
+        let res = get_client(token).await?.list_documents(req).await?;
 
         Ok(res.into_inner())
     }
@@ -168,14 +175,14 @@ impl<'a> ListDocumentsOptions<'a> {
 
 #[derive(Debug)]
 pub struct ListCollectionsOptions<'a> {
-    pub client: &'a mut FirebaseClient,
+    pub client: &'a FirebaseClient,
     pub parent: Option<String>,
     pub page_size: Option<i32>,
     pub page_token: Option<String>,
 }
 
 impl<'a> ListCollectionsOptions<'a> {
-    fn new(client: &'a mut FirebaseClient) -> Self {
+    fn new(client: &'a FirebaseClient) -> Self {
         Self {
             client,
             parent: None,
@@ -269,7 +276,7 @@ impl<'a> ListCollectionsOptions<'a> {
             req.page_token = page_token.clone();
         }
 
-        let res = get_client(&token).await?.list_collection_ids(req).await?;
+        let res = get_client(token).await?.list_collection_ids(req).await?;
 
         Ok(res.into_inner())
     }
@@ -280,12 +287,12 @@ impl<'a> ListCollectionsOptions<'a> {
 
 #[derive(Debug)]
 pub struct GetDocumentOptions<'a> {
-    pub client: &'a mut FirebaseClient,
+    pub client: &'a FirebaseClient,
     pub name: String,
 }
 
 impl<'a> GetDocumentOptions<'a> {
-    fn new(client: &'a mut FirebaseClient, name: String) -> Self {
+    fn new(client: &'a FirebaseClient, name: String) -> Self {
         Self { client, name }
     }
 
@@ -305,7 +312,7 @@ impl<'a> GetDocumentOptions<'a> {
             ..Default::default()
         };
 
-        let res = get_client(&token).await?.get_document(req).await?;
+        let res = get_client(token).await?.get_document(req).await?;
         Ok(res.into_inner())
     }
 }
@@ -315,12 +322,12 @@ impl<'a> GetDocumentOptions<'a> {
 
 #[derive(Debug)]
 pub struct DeleteDocumentOptions<'a> {
-    pub client: &'a mut FirebaseClient,
+    pub client: &'a FirebaseClient,
     pub name: String,
 }
 
 impl<'a> DeleteDocumentOptions<'a> {
-    fn new(client: &'a mut FirebaseClient, name: String) -> Self {
+    fn new(client: &'a FirebaseClient, name: String) -> Self {
         Self { client, name }
     }
 
@@ -340,7 +347,7 @@ impl<'a> DeleteDocumentOptions<'a> {
             current_document: None,
         };
 
-        get_client(&token).await?.delete_document(req).await?;
+        get_client(token).await?.delete_document(req).await?;
         Ok(())
     }
 }
@@ -350,12 +357,12 @@ impl<'a> DeleteDocumentOptions<'a> {
 
 #[derive(Debug)]
 pub struct BatchGetDocumentOptions<'a> {
-    pub client: &'a mut FirebaseClient,
+    pub client: &'a FirebaseClient,
     pub names: Vec<String>,
 }
 
 impl<'a> BatchGetDocumentOptions<'a> {
-    fn new(client: &'a mut FirebaseClient, names: Vec<String>) -> Self {
+    fn new(client: &'a FirebaseClient, names: Vec<String>) -> Self {
         Self { client, names }
     }
 
@@ -376,7 +383,7 @@ impl<'a> BatchGetDocumentOptions<'a> {
             database,
             ..Default::default()
         };
-        let res = get_client(&token).await?.batch_get_documents(req).await?;
+        let res = get_client(token).await?.batch_get_documents(req).await?;
         let stream = res.into_inner();
         futures::pin_mut!(stream);
         Ok(stream.collect().await)
@@ -502,7 +509,7 @@ impl<'a> QueryOptions<'a> {
         };
 
         let token = client.get_token().await?;
-        let res = get_client(&token).await?.run_query(req).await?;
+        let res = get_client(token).await?.run_query(req).await?;
         let stream = res.into_inner();
         futures::pin_mut!(stream);
         Ok(stream.collect().await)
@@ -514,12 +521,12 @@ impl<'a> QueryOptions<'a> {
 
 #[derive(Debug)]
 pub struct UpdateDocumentOptions<'a> {
-    pub client: &'a mut FirebaseClient,
+    pub client: &'a FirebaseClient,
     pub document: Document,
 }
 
 impl<'a> UpdateDocumentOptions<'a> {
-    fn new(client: &'a mut FirebaseClient, name: String) -> Self {
+    fn new(client: &'a FirebaseClient, name: String) -> Self {
         let name = format!(
             "projects/{}/databases/(default)/documents/{}",
             client.project_id, name
@@ -565,7 +572,7 @@ impl<'a> UpdateDocumentOptions<'a> {
             current_document: None,
         };
 
-        let res = get_client(&token).await?.update_document(req).await;
+        let res = get_client(token).await?.update_document(req).await;
 
         let res = match res {
             Err(status) => {
@@ -584,13 +591,13 @@ impl<'a> UpdateDocumentOptions<'a> {
 
 #[derive(Debug)]
 pub struct BatchUpdateDocumentOptions<'a> {
-    pub client: &'a mut FirebaseClient,
+    pub client: &'a FirebaseClient,
     pub updates: Vec<Document>,
     pub deletes: Vec<String>,
 }
 
 impl<'a> BatchUpdateDocumentOptions<'a> {
-    fn new(client: &'a mut FirebaseClient) -> Self {
+    fn new(client: &'a FirebaseClient) -> Self {
         Self {
             client,
             updates: Vec::new(),
@@ -649,7 +656,7 @@ impl<'a> BatchUpdateDocumentOptions<'a> {
                 writes,
                 ..Default::default()
             };
-            let res = get_client(&token).await?.batch_write(req).await?;
+            let res = get_client(token.clone()).await?.batch_write(req).await?;
             responses.push(res.into_inner());
         }
 
@@ -689,7 +696,7 @@ impl FirebaseClient {
         FirebaseClient { project_id, auth }
     }
 
-    pub async fn get_token(&self) -> Result<String> {
+    pub async fn get_token(&self) -> Result<Option<String>> {
         Ok(self.auth.get_token().await?)
     }
 
@@ -701,27 +708,27 @@ impl FirebaseClient {
         ListDocumentsOptions::new(self, collection_id.to_string())
     }
 
-    pub fn list_collections(&mut self) -> ListCollectionsOptions<'_> {
+    pub fn list_collections(&self) -> ListCollectionsOptions<'_> {
         ListCollectionsOptions::new(self)
     }
 
-    pub fn get_document<S: ToString>(&mut self, name: S) -> GetDocumentOptions<'_> {
+    pub fn get_document<S: ToString>(&self, name: S) -> GetDocumentOptions<'_> {
         GetDocumentOptions::new(self, name.to_string())
     }
 
-    pub fn delete_document<S: ToString>(&mut self, name: S) -> DeleteDocumentOptions<'_> {
+    pub fn delete_document<S: ToString>(&self, name: S) -> DeleteDocumentOptions<'_> {
         DeleteDocumentOptions::new(self, name.to_string())
     }
 
-    pub fn batch_get_documents<S: ToString>(&mut self, names: &[S]) -> BatchGetDocumentOptions<'_> {
+    pub fn batch_get_documents<S: ToString>(&self, names: &[S]) -> BatchGetDocumentOptions<'_> {
         BatchGetDocumentOptions::new(self, names.iter().map(|ea| ea.to_string()).collect())
     }
 
-    pub fn update_document<S: ToString>(&mut self, id: S) -> UpdateDocumentOptions<'_> {
+    pub fn update_document<S: ToString>(&self, id: S) -> UpdateDocumentOptions<'_> {
         UpdateDocumentOptions::new(self, id.to_string())
     }
 
-    pub fn batch_update(&mut self) -> BatchUpdateDocumentOptions<'_> {
+    pub fn batch_update(&self) -> BatchUpdateDocumentOptions<'_> {
         BatchUpdateDocumentOptions::new(self)
     }
 
@@ -730,7 +737,7 @@ impl FirebaseClient {
     }
 
     pub fn stream_builder<S: ToString>(
-        &mut self,
+        &self,
         collection_id: S,
     ) -> super::streaming::ListenRequestBuilder {
         super::streaming::ListenRequestBuilder::new(self.clone(), &self.project_id, collection_id)

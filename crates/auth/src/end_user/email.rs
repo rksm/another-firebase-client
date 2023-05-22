@@ -1,9 +1,6 @@
-use crate::{error::EmailLoginError, WebLoginResult};
+use crate::{error::EndUserLoginError, WebLoginResult};
 
 use super::WebClientConfig;
-
-const EMAIL_SIGNIN_URL: &str =
-    "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword";
 
 #[derive(serde::Serialize)]
 pub struct EmailSignin {
@@ -22,9 +19,15 @@ impl EmailSignin {
         }
     }
 
-    pub async fn login(&self, config: &WebClientConfig) -> Result<WebLoginResult, EmailLoginError> {
-        let url =
-            url::Url::parse_with_params(EMAIL_SIGNIN_URL, [("key", config.api_key.as_str())])?;
+    pub async fn send(
+        &self,
+        config: &WebClientConfig,
+    ) -> Result<WebLoginResult, EndUserLoginError> {
+        let url = url::Url::parse_with_params(
+            super::urls::EMAIL_SIGNIN_URL,
+            [("key", config.api_key.as_str())],
+        )?;
+
         let response = reqwest::ClientBuilder::new()
             .build()?
             .post(url)
@@ -32,8 +35,6 @@ impl EmailSignin {
             .send()
             .await?;
 
-        let response = response.json::<serde_json::Value>().await?;
-
-        Ok(serde_json::from_value(response)?)
+        Ok(response.json().await?)
     }
 }

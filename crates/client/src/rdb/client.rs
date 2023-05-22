@@ -54,10 +54,13 @@ impl RdbClient {
 
         tracing::debug!("rdb request {}", url);
 
-        let token = self.auth.get_token().await?;
-        let mut client = reqwest::Client::new()
-            .request(method, url)
-            .bearer_auth(&token);
+        let client = reqwest::Client::new().request(method, url);
+        let mut client = if let Some(token) = self.auth.get_token().await? {
+            client.bearer_auth(&token)
+        } else {
+            client
+        };
+
         if let Some(body) = body {
             client = client.body(body);
         }
