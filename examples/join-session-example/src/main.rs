@@ -1,10 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
+use firebase_client::auth::{Authorization, EmailSignin, WebUserAuth};
 use firebase_client::firestore::FromFirestoreDocument;
 use firebase_client::{
     firestore::types::structured_query::field_filter::Operator::*, rdb::RdbClient,
 };
-use firebase_client_auth::{Authorization, EmailSignin, WebUserAuth};
 use serde_json::Value;
 
 #[derive(Debug, Parser)]

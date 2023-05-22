@@ -1,7 +1,7 @@
 use clap::Parser;
 use firebase_client::firestore::types::structured_query::field_filter::Operator::*;
 use firebase_client::firestore::FromFirestoreDocument;
-use firebase_client_auth::{EmailSignin, WebUserAuth};
+use firebase_client::auth::{EmailSignin, WebUserAuth};
 use serde_json::Value;
 
 #[derive(Debug, Parser)]

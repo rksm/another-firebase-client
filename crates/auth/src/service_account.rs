@@ -34,11 +34,14 @@ impl GoogleServiceAccount {
         Ok(serde_json::from_value(json)?)
     }
 
+    pub fn from_json_str(json: &str) -> Result<Self> {
+        Ok(serde_json::from_str(json)?)
+    }
+
     pub fn from_env_var<S: AsRef<str>>(name: S) -> Result<Self> {
         let env_var_content = std::env::var(name.as_ref())
-            .map_err(|e| anyhow::anyhow!("environment varibale {}: {}", name.as_ref(), e))?;
-        let account = serde_json::from_str(&env_var_content)?;
-        Ok(account)
+            .map_err(|e| anyhow::anyhow!("environment variable {}: {}", name.as_ref(), e))?;
+        Self::from_json_str(&env_var_content)
     }
 
     pub fn from_default_env_var() -> Result<Self> {

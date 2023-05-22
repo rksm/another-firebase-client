@@ -1,5 +1,5 @@
 use clap::Parser;
-use firebase_client_auth::WebUserAnonAuth;
+use firebase_client::auth::WebUserAnonAuth;
 
 #[derive(Debug, Parser)]
 struct Opts {
