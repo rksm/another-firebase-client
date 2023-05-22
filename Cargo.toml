@@ -6,5 +6,6 @@ members = [
   "crates/auth",
 
   "examples/firebase-client-example",
+  "examples/join-session-example",
   "examples/anon-example"
 ]

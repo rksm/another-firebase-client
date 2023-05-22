@@ -41,21 +41,26 @@ async fn main() {
     // the firestore client
     let client = firebase_client::firestore::FirebaseClient::new(auth);
 
-    // list all coscreens of that user
-    let coscreens = client
-        .run_query()
-        .from("coscreens")
-        .field_filter("members", ArrayContains, uid)
-        .fetch()
-        .await
-        .expect("failed to run query");
+    loop {
+        // list all coscreens of that user
+        let coscreens = client
+            .run_query()
+            .from("coscreens")
+            .field_filter("members", ArrayContains, &uid)
+            .fetch()
+            .await
+            .expect("failed to run query");
 
-    println!("User {} can access the following CoScreens:", opts.email);
-    for coscreen in coscreens {
-        // Note: types for CoScreen objects are not yet extracted.
-        // Currently they are defined via https://gitlab.com/coscreen/coscreen-backend-rs/blob/master/crates/coscreen-db/src/db/
-        // but that is not yet suitable for client-side consumption
-        let coscreen = Value::convert_doc(coscreen).unwrap();
-        println!("{:#?}", coscreen);
+        println!("User {} can access the following CoScreens:", opts.email);
+
+        for coscreen in coscreens {
+            // Note: types for CoScreen objects are not yet extracted.
+            // Currently they are defined via https://gitlab.com/coscreen/coscreen-backend-rs/blob/master/crates/coscreen-db/src/db/
+            // but that is not yet suitable for client-side consumption
+            let coscreen = Value::convert_doc(coscreen).unwrap();
+            println!("{:#?}", coscreen);
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
     }
 }

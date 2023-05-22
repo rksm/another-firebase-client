@@ -14,5 +14,9 @@ anon-example *args='':
     FIREBASE_CLIENT_CONFIG=$(aws --profile exec-coscreen-account-admin secretsmanager get-secret-value --output=json --region=us-east-2 --secret-id prod/firebase/native-client-config | jq -rc '.SecretString|fromjson') \
       cargo run --bin anon-example -- {{args}}
 
+join-session-example *args='':
+    FIREBASE_CLIENT_CONFIG=$(aws --profile exec-coscreen-account-admin secretsmanager get-secret-value --output=json --region=us-east-2 --secret-id prod/firebase/native-client-config | jq -rc '.SecretString|fromjson') \
+      cargo run --bin join-session-example -- {{args}}
+
 test:
     cargo test -- --nocapture

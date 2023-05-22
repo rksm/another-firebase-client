@@ -1,5 +1,4 @@
-/// Firebase client configuration as found at
-/// https://console.firebase.google.com/u/0/project/coscreen-5d7cc/settings/general/web:Mzc2ODUyYmUtM2M3MC00MGRkLWEzYmUtZjA4ZWJlNTVjYmVm
+/// Firebase client configuration as found at https://console.firebase.google.com/
 #[derive(serde::Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WebClientConfig {
