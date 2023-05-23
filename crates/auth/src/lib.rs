@@ -32,21 +32,11 @@ pub type GoogleAuth = Box<dyn Authorization + Send>;
 /// $GOOGLE_SERVICE_ACCOUNT env var.
 /// If that fails, will try to get auth credentials from the gcloud cli utility.
 pub fn auth_from_env_or_cli() -> Option<GoogleAuth> {
-    match GoogleServiceAccount::from_default_env_var().map(|acct| {
-        ServiceAccountAuthorization::with_account_and_scope(
-            acct,
-            &[
-                scopes::AUTH_DATASTORE,
-                scopes::AUTH_USERINFO_EMAIL,
-                scopes::AUTH_CLOUD_PLATFORM,
-                scopes::AUTH_LOGGING_READ,
-            ],
-        )
-    }) {
+    match GoogleServiceAccount::from_default_env_var().map(auth_for_service_account) {
         Err(_) => {
             tracing::debug!("No service account specified in environment variable.");
         }
-        Ok(auth) => return Some(Box::new(auth)),
+        Ok(auth) => return Some(auth),
     };
 
     match CliAuthorization::new() {
@@ -57,4 +47,16 @@ pub fn auth_from_env_or_cli() -> Option<GoogleAuth> {
     };
 
     None
+}
+
+pub fn auth_for_service_account(acct: GoogleServiceAccount) -> GoogleAuth {
+    Box::new(ServiceAccountAuthorization::with_account_and_scope(
+        acct,
+        &[
+            scopes::AUTH_DATASTORE,
+            scopes::AUTH_USERINFO_EMAIL,
+            scopes::AUTH_CLOUD_PLATFORM,
+            scopes::AUTH_LOGGING_READ,
+        ],
+    ))
 }
