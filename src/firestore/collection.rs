@@ -134,7 +134,7 @@ where
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&file)?;
+            .open(file)?;
 
         serde_json::to_writer(file, &self)?;
         // serde_json::to_writer_pretty(file, &self)?;
@@ -161,7 +161,7 @@ where
         changed_docs
     }
 
-    pub async fn fill(&mut self, client: &mut FirebaseClient) -> Result<usize> {
+    pub async fn fill(&mut self, client: &FirebaseClient) -> Result<usize> {
         let docs = client
             .list_documents(&self.name)
             .page_size(300)

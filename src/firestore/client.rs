@@ -163,7 +163,6 @@ impl<'a> ListDocumentsOptions<'a> {
             req.page_token = page_token.clone();
         }
 
-        let t = token.as_ref();
         let res = get_client(token).await?.list_documents(req).await?;
 
         Ok(res.into_inner())

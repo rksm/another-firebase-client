@@ -164,7 +164,7 @@ fn start_http_connection(
         } else {
             client
         };
-        let client = es::Client::for_url(url.as_ref())?
+        let client = client
             .header("Accept", "text/event-stream")?
             .reconnect(
                 es::ReconnectOptions::reconnect(true)
