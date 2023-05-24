@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/cli",
+  "crates/admin_auth",
   "crates/auth",
 
   "examples/firebase-client-example",
@@ -9,7 +10,8 @@ members = [
   "examples/anon-example"
 ]
 exclude = [
-  "examples/service-account-example"
+  "examples/service-account-example",
+  "examples/admin_auth_example"
 ]
 
 [package]
@@ -39,6 +41,7 @@ tracing = "0.1.34"
 url = "2.2.2"
 
 firebase-client-auth = { path = "crates/auth" }
+firebase-client-admin-auth = { path = "crates/admin_auth" }
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
