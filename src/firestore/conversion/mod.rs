@@ -20,7 +20,9 @@ pub trait FromFirestoreValue: Sized {
 
 pub trait IntoFirestoreDocument {
     type Err: Debug + Display;
+    /// Assumes self is the fields of a document.
     fn into_document_from_fields(self) -> Result<firestore::Document, Self::Err>;
+    /// Assumes self can directly produce a document.
     fn into_document(self) -> Result<firestore::Document, Self::Err>;
 }
 

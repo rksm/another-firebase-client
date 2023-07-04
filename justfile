@@ -23,6 +23,8 @@ join-session-example *args='':
 admin-auth-example *args='':
     cd examples/admin_auth_example && ./run.sh {{args}}
 
-
 test:
     cargo test -- --nocapture
+
+install:
+    cargo install --path crates/cli
