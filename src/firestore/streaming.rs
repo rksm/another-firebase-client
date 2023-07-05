@@ -275,6 +275,7 @@ impl ListenRequestBuilder {
             target_change: Some(firestore::listen_request::TargetChange::AddTarget(
                 firestore::Target {
                     target_id: GRPC_TARGET_ID,
+                    expected_count: None,
                     once: false,
                     target_type: Some(TargetType::Query(QueryTarget {
                         parent: parent.clone(),
