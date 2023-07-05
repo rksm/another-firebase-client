@@ -457,6 +457,15 @@ impl<'a> QueryOptions<'a> {
         self
     }
 
+    pub fn composite_filter(
+        mut self,
+        op: structured_query::CompositeFilterOperator,
+        filters: Vec<structured_query::Filter>,
+    ) -> Self {
+        self.structured_query.composite_filter(op, filters);
+        self
+    }
+
     pub async fn fetch(self) -> Result<Vec<Document>> {
         let responses = self.make_request().await?;
         let mut result = Vec::new();

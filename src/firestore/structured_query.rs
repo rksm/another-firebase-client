@@ -6,11 +6,12 @@ pub use prost_types::Timestamp;
 pub type UnaryFilterOperator = firestore::structured_query::unary_filter::Operator;
 pub type FieldFilterOperator = firestore::structured_query::field_filter::Operator;
 pub type CompositeFilterOperator = firestore::structured_query::composite_filter::Operator;
+pub type Filter = firestore::structured_query::Filter;
 
 #[derive(Clone)]
 pub struct StructuredQueryBuilder {
     pub order_by: Vec<firestore::structured_query::Order>,
-    pub filter: Option<firestore::structured_query::Filter>,
+    pub filter: Option<Filter>,
     pub limit: Option<i32>,
     pub offset: i32,
     pub start_at: Option<firestore::Cursor>,
@@ -56,19 +57,7 @@ impl StructuredQueryBuilder {
     }
 
     pub fn unary_filter<S: ToString>(&mut self, field: S, op: UnaryFilterOperator) {
-        use firestore::structured_query::*;
-
-        let field = FieldReference {
-            field_path: field.to_string(),
-        };
-
-        let operand_type = unary_filter::OperandType::Field(field);
-        self.filter = Some(firestore::structured_query::Filter {
-            filter_type: Some(filter::FilterType::UnaryFilter(UnaryFilter {
-                op: op.into(),
-                operand_type: Some(operand_type),
-            })),
-        });
+        self.filter = Some(unary_filter(field, op));
     }
 
     pub fn field_filter<T, S>(&mut self, field: S, op: FieldFilterOperator, value: T)
@@ -76,20 +65,11 @@ impl StructuredQueryBuilder {
         T: IntoFirestoreDocumentValue,
         S: ToString,
     {
-        use firestore::structured_query::*;
+        self.filter = Some(field_filter(field, op, value));
+    }
 
-        let field = FieldReference {
-            field_path: field.to_string(),
-        };
-        let value = value.into_document_value();
-
-        self.filter = Some(firestore::structured_query::Filter {
-            filter_type: Some(filter::FilterType::FieldFilter(FieldFilter {
-                op: op.into(),
-                field: Some(field),
-                value: Some(value),
-            })),
-        });
+    pub fn composite_filter(&mut self, op: CompositeFilterOperator, filters: Vec<Filter>) {
+        self.filter = Some(composite_filter(op, filters));
     }
 
     pub fn build(self) -> firestore::StructuredQuery {
@@ -118,6 +98,53 @@ impl StructuredQueryBuilder {
             offset,
             limit,
         }
+    }
+}
+
+pub fn unary_filter<S: ToString>(field: S, op: UnaryFilterOperator) -> Filter {
+    use firestore::structured_query::*;
+
+    let field = FieldReference {
+        field_path: field.to_string(),
+    };
+
+    let operand_type = unary_filter::OperandType::Field(field);
+    Filter {
+        filter_type: Some(filter::FilterType::UnaryFilter(UnaryFilter {
+            op: op.into(),
+            operand_type: Some(operand_type),
+        })),
+    }
+}
+
+pub fn field_filter<T, S>(field: S, op: FieldFilterOperator, value: T) -> Filter
+where
+    T: IntoFirestoreDocumentValue,
+    S: ToString,
+{
+    use firestore::structured_query::*;
+
+    let field = FieldReference {
+        field_path: field.to_string(),
+    };
+    let value = value.into_document_value();
+
+    Filter {
+        filter_type: Some(filter::FilterType::FieldFilter(FieldFilter {
+            op: op.into(),
+            field: Some(field),
+            value: Some(value),
+        })),
+    }
+}
+
+pub fn composite_filter(op: CompositeFilterOperator, filters: Vec<Filter>) -> Filter {
+    use firestore::structured_query::*;
+    Filter {
+        filter_type: Some(filter::FilterType::CompositeFilter(CompositeFilter {
+            op: op.into(),
+            filters,
+        })),
     }
 }
 
