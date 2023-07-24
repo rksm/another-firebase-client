@@ -384,9 +384,9 @@ dependencies = [
 
 [[package]]
 name = "firestore_grpc"
-version = "0.133.0"
+version = "0.170.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1529c81f75646ee26b722a191195f37b3e0bf7a561cdf97fa0a4e94aafd1ed0a"
+checksum = "ffe82283feb8974cf1bf7197d012d839d61b1aea8f0122d3067d861f44de6de9"
 dependencies = [
  "prost",
  "prost-types",
