@@ -1,7 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use firebase_client::firestore::{
-    collection::CachedCollection, FirebaseClient, FromFirestoreDocument,
+    collection::CachedCollection, conversion::convert_document_fields_to_obj_with_id,
+    FirebaseClient, FromFirestoreDocument,
 };
 use futures::StreamExt;
 use serde_json::Value;
@@ -17,14 +18,15 @@ struct Options {
     #[arg[long, help("Directory used for storing progress into.")]]
     data_dir: Option<PathBuf>,
 
-    #[arg(short, long, value_enum, default_value_t = Env::Dev, help("Which env to run against? Defaults to dev."))]
-    env: Env,
+    #[arg(long, default_value = ".env", help("Which .env file to use?"))]
+    dot_env: String,
 
     #[arg(value_enum, help("The method to apply."))]
     method: Method,
 
     #[arg(help("The path name / collection_id."),
-          required_if_eq_any([("method", "list"),("method", "get"),
+          required_if_eq_any([("method", "list"),
+                              ("method", "get"),
                               ("method", "update"),
                               ("method", "delete"),
                               ("method", "stream")]))]
@@ -32,12 +34,6 @@ struct Options {
 
     #[arg(help("The JSON value to send."))]
     value: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum, Eq, PartialEq, PartialOrd, Ord)]
-enum Env {
-    Dev,
-    Prod,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum, Eq, PartialEq, PartialOrd, Ord)]
@@ -56,18 +52,13 @@ async fn main() -> Result<()> {
 
     let Options {
         data_dir,
-        env,
+        dot_env,
         method,
         path,
         value,
     } = Options::parse();
 
-    let env_file = match env {
-        Env::Prod => ".env",
-        Env::Dev => ".env-dev",
-    };
-
-    dotenv::from_filename(env_file).expect(".env");
+    dotenv::from_filename(dot_env).expect(".env");
 
     let data_dir = data_dir.as_ref().map(|data_dir| {
         let data_dir: PathBuf = data_dir.into();
@@ -82,7 +73,7 @@ async fn main() -> Result<()> {
         .unwrap_or(serde_json::Value::Null);
 
     let acct = firebase_client_auth::GoogleServiceAccount::from_default_env_var()?;
-    let mut client = FirebaseClient::for_account(acct);
+    let client = FirebaseClient::for_account(acct);
 
     match method {
         Method::List => {
@@ -92,23 +83,39 @@ async fn main() -> Result<()> {
                 ("", path.as_str())
             };
 
-            let res = client.list_documents(name).parent(parent).fetch().await?;
-            dbg!(res);
+            let res = client
+                .list_documents(name)
+                .parent(parent)
+                .fetch_all()
+                .await?;
+            let json_list = res
+                .into_iter()
+                .map(convert_document_fields_to_obj_with_id::<Value>)
+                .collect::<anyhow::Result<Vec<_>>>()
+                .expect("convert to json");
+            let json = serde_json::to_string_pretty(&json_list)?;
+            println!("{}", json);
         }
 
         Method::Get => {
-            let res = client.get_document(path).fetch().await?;
-            dbg!(res);
+            let doc = client.get_document(path).fetch().await?;
+            let doc =
+                convert_document_fields_to_obj_with_id::<Value>(doc).expect("convert to json");
+            let json = serde_json::to_string_pretty(&doc)?;
+            println!("{}", json);
         }
 
         Method::Update => {
-            let res = client
+            let doc = client
                 .update_document(path)
                 .document(value)
                 .update()
                 .await?;
 
-            dbg!(res);
+            let doc =
+                convert_document_fields_to_obj_with_id::<Value>(doc).expect("convert to json");
+            let json = serde_json::to_string_pretty(&doc)?;
+            println!("{}", json);
         }
 
         Method::Delete => {
@@ -129,11 +136,8 @@ async fn main() -> Result<()> {
 
         Method::Collections => {
             let collection_ids = client.list_collections().fetch_all().await?;
-            println!(
-                "found {} collections:\n  {}",
-                collection_ids.len(),
-                collection_ids.join("\n  ")
-            );
+            let json = serde_json::to_string_pretty(&collection_ids)?;
+            println!("{json}",);
         }
     }
 
@@ -141,7 +145,7 @@ async fn main() -> Result<()> {
 }
 
 async fn stream_collection(
-    mut client: FirebaseClient,
+    client: FirebaseClient,
     data_dir: impl AsRef<Path>,
     collection: impl ToString,
 ) -> Result<()> {
