@@ -11,10 +11,9 @@ use firestore_grpc::v1::{self as firestore, ListenResponse, TargetChange};
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
 use rand::prelude::*;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 use super::collection::*;
@@ -242,7 +241,7 @@ impl ListenRequestBuilder {
                 }
             }
 
-            tracing::debug!("stopped streaming {}", self.collection);
+            tracing::info!("stopped streaming {}", self.collection);
 
         };
 
@@ -344,10 +343,10 @@ impl CollectionStreamController {
 }
 
 pub type CollectionStream<E = anyhow::Error> =
-    Pin<Box<dyn Stream<Item = Result<CollectionUpdate, E>>>>;
+    Pin<Box<dyn Stream<Item = Result<CollectionUpdate, E>> + Send>>;
 
 pub struct CollectionStreamState {
-    pub target_ids: Rc<RefCell<Vec<i32>>>,
+    pub target_ids: Arc<Mutex<Vec<i32>>>,
     pub documents: SharedDocuments,
     pub changes: Vec<CollectionChange>,
 }
@@ -356,11 +355,11 @@ impl CollectionStreamState {
     pub fn map_stream(
         inbound: tonic::Streaming<firestore::ListenResponse>,
     ) -> CollectionStream<tonic::Status> {
-        let target_ids = Rc::new(RefCell::new(Vec::new()));
+        let target_ids = Arc::new(Mutex::new(Vec::new()));
         let documents = HashMap::new();
         let changes = Vec::new();
 
-        let state = Rc::new(RefCell::new(Self {
+        let state = Arc::new(Mutex::new(Self {
             documents,
             changes,
             target_ids,
@@ -371,7 +370,7 @@ impl CollectionStreamState {
             async move {
                 match res {
                     Err(err) => Some(Err(err)),
-                    Ok(res) => state.borrow_mut().handle_listen_response(res).map(Ok),
+                    Ok(res) => state.lock().unwrap().handle_listen_response(res).map(Ok),
                 }
             }
         }))
@@ -409,19 +408,19 @@ impl CollectionStreamState {
                 match change.target_change_type() {
                     TargetChangeType::Add => {
                         tracing::trace!("TargetChangeType::Add");
-                        if let Ok(mut target_ids) = self.target_ids.try_borrow_mut() {
+                        if let Ok(mut target_ids) = self.target_ids.lock() {
                             target_ids.extend(change.target_ids);
                         }
                     }
 
                     TargetChangeType::Remove => {
                         if let Some(cause) = change.cause {
-                            tracing::trace!("TargetChangeType::Remove because {:?}", cause);
+                            tracing::info!(?cause, "TargetChangeType::Remove");
                         } else {
-                            tracing::trace!("TargetChangeType::Remove");
+                            tracing::info!("TargetChangeType::Remove");
                         };
 
-                        if let Ok(mut target_ids) = self.target_ids.try_borrow_mut() {
+                        if let Ok(mut target_ids) = self.target_ids.lock() {
                             target_ids.retain(|i| !change.target_ids.contains(i));
                         }
                     }
