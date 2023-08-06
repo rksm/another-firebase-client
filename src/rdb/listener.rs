@@ -1,5 +1,6 @@
 use super::{listener_updates::*, RdbClient};
 use anyhow::Result;
+use es::Client;
 use eventsource_client as es;
 use futures::{Stream, TryStreamExt};
 use serde_json::Value;
@@ -79,21 +80,17 @@ impl Listener {
                         continue 'outer;
                     }
 
-                    let payload = evt.field("data").unwrap_or_default();
+                    let payload = evt.data;
 
-                    tracing::trace!(
-                        "received event {} payload: {}",
-                        evt.event_type,
-                        String::from_utf8_lossy(payload)
-                    );
+                    tracing::trace!("received event {} payload: {}", evt.event_type, payload);
 
                     let action = match &evt.event_type as &str {
                         "put" => {
-                            let data: RdbEvent = serde_json::from_slice(payload).unwrap();
+                            let data: RdbEvent = serde_json::from_str(&payload).unwrap();
                             Action::Put((data.path, data.data).into())
                         }
                         "patch" => {
-                            let data: RdbEvent = serde_json::from_slice(payload).unwrap();
+                            let data: RdbEvent = serde_json::from_str(&payload).unwrap();
                             Action::Patch((data.path, data.data).into())
                         }
                         "keep-alive" => continue,
@@ -158,7 +155,7 @@ fn start_http_connection(
     mut rx: mpsc::Receiver<RdbControlMessage>,
 ) -> JoinHandle<Result<(), es::Error>> {
     tokio::spawn(async move {
-        let client = es::Client::for_url(url.as_ref())?;
+        let client = es::ClientBuilder::for_url(url.as_ref())?;
         let client = if let Some(auth) = auth {
             client.header("Authorization", &auth)?
         } else {
@@ -196,9 +193,18 @@ fn start_http_connection(
                 event = stream.try_next() => {
                     match event {
                         Ok(Some(event)) => {
-                            if let Err(err) = tx.send(event.clone()).await {
-                                eprintln!("error sending event from sse stream: {}", err);
-                            };
+                            match event {
+                                es::SSE::Event(event) => {
+                                    if let Err(err) = tx.send(event.clone()).await {
+                                        eprintln!("error sending event from sse stream: {}", err);
+                                    };
+
+                                }
+                                es::SSE::Comment(comment) => {
+                                    tracing::info!("received SSE comment: {comment:?}");
+                                },
+                            }
+
 
                         },
                         Ok(None) => break,

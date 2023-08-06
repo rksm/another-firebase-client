@@ -536,15 +536,17 @@ dependencies = [
 
 [[package]]
 name = "eventsource-client"
-version = "0.7.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a98435d5c923580a771b423ec68be4ae51dab4e1bd151d55b5371d6014add3b"
+checksum = "3b91e5ec5c794bbec5f639620f0bafe421b6d27dec66ac1ce3fdb6f009db3a6c"
 dependencies = [
  "futures",
  "hyper",
  "hyper-rustls",
+ "hyper-timeout",
  "log",
  "pin-project",
+ "rand",
  "tokio",
 ]
 
@@ -576,7 +578,7 @@ dependencies = [
  "firebase-client-auth",
  "firestore_grpc",
  "futures",
- "itertools",
+ "itertools 0.11.0",
  "jsonwebtoken",
  "pretty_assertions",
  "prost-types",
@@ -667,9 +669,9 @@ dependencies = [
 
 [[package]]
 name = "firestore_grpc"
-version = "0.170.0"
+version = "0.175.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffe82283feb8974cf1bf7197d012d839d61b1aea8f0122d3067d861f44de6de9"
+checksum = "62f9225d6cb03745779284236278cc0763c63d7cd67aba50b586bc934a7124a9"
 dependencies = [
  "prost",
  "prost-types",
@@ -1100,6 +1102,15 @@ name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
 dependencies = [
  "either",
 ]
@@ -1662,7 +1673,7 @@ checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
 dependencies = [
  "bytes",
  "heck 0.3.3",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -1681,7 +1692,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
