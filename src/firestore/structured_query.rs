@@ -32,8 +32,9 @@ impl StructuredQueryBuilder {
         }
     }
 
-    pub fn from<S: ToString>(&mut self, collection_id: S) {
-        self.from_collections.push(collection_id.to_string())
+    pub fn from<S: ToString>(mut self, collection_id: S) -> Self {
+        self.from_collections.push(collection_id.to_string());
+        self
     }
 
     #[must_use]

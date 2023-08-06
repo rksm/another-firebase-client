@@ -1,12 +1,13 @@
 use anyhow::Result;
 pub use firestore_grpc::google::firestore::v1::ListDocumentsResponse;
-use firestore_grpc::tonic::{self, IntoStreamingRequest};
-use firestore_grpc::tonic::{metadata::MetadataValue, Request};
-use firestore_grpc::v1::listen_response::ResponseType;
-use firestore_grpc::v1::target::query_target::QueryType;
-use firestore_grpc::v1::target::{QueryTarget, TargetType};
-use firestore_grpc::v1::target_change::TargetChangeType;
-use firestore_grpc::v1::{self as firestore, ListenResponse, TargetChange};
+use firestore_grpc::tonic::{self, metadata::MetadataValue, IntoStreamingRequest, Request};
+use firestore_grpc::v1::{
+    self as firestore,
+    listen_response::ResponseType,
+    target::{query_target::QueryType, QueryTarget, TargetType},
+    target_change::TargetChangeType,
+    ListenResponse, TargetChange,
+};
 
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
@@ -48,10 +49,9 @@ impl ListenRequestBuilder {
         collection_id: S2,
     ) -> Self {
         let project_id = project_id.as_ref();
-        let database = format!("projects/{}/databases/(default)", project_id);
-        let parent = format!("{}/documents", database);
-        let mut structured_query = StructuredQueryBuilder::new();
-        structured_query.from(collection_id.to_string());
+        let database = format!("projects/{project_id}/databases/(default)");
+        let parent = format!("{database}/documents");
+        let structured_query = StructuredQueryBuilder::new().from(collection_id.to_string());
         Self {
             client,
             database,

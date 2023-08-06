@@ -408,7 +408,9 @@ impl<'a> QueryOptions<'a> {
     }
 
     pub fn from<S: ToString>(mut self, collection_id: S) -> Self {
-        self.structured_query.from(collection_id);
+        self.structured_query
+            .from_collections
+            .push(collection_id.to_string());
         self
     }
 
