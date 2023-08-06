@@ -165,7 +165,7 @@ impl ListenRequestBuilder {
                     tokio::time::sleep(std::time::Duration::from_secs(retry_count)).await;
                 }
 
-                let (mut stream, mut current_controller) = match self.build().await {
+                let (mut stream, current_controller) = match self.build().await {
                     Err(err) if retry_count < max_retry => {
                         tracing::warn!("sending streaming request for {:?} errored, retrying ({})", self.collection, err);
                         continue;
@@ -342,7 +342,7 @@ impl CollectionStreamController {
         (rx, Self { control_tx })
     }
 
-    pub async fn stop(&mut self) -> Result<()> {
+    pub async fn stop(&self) -> Result<()> {
         self.control_tx.send(StreamControlMessage::Stop).await?;
         Ok(())
     }
