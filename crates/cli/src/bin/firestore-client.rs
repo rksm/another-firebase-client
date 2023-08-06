@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use firebase_client::firestore::{
     collection::CachedCollection, conversion::convert_document_fields_to_obj_with_id,
-    FirebaseClient, FromFirestoreDocument,
+    types::Document, FirebaseClient, FromFirestoreDocument,
 };
 use futures::StreamExt;
 use serde_json::Value;
@@ -15,16 +15,16 @@ use std::path::{Path, PathBuf};
     about("Read and modify values of firebase firestore.")
 )]
 struct Options {
-    #[arg[long, help("Directory used for storing progress into.")]]
+    #[clap[long, help("Directory used for storing progress into.")]]
     data_dir: Option<PathBuf>,
 
-    #[arg(long, default_value = ".env", help("Which .env file to use?"))]
+    #[clap(long, default_value = ".env", help("Which .env file to use?"))]
     dot_env: String,
 
-    #[arg(value_enum, help("The method to apply."))]
+    #[clap(value_enum, help("The method to apply."))]
     method: Method,
 
-    #[arg(help("The path name / collection_id."),
+    #[clap(help("The path name / collection_id."),
           required_if_eq_any([("method", "list"),
                               ("method", "get"),
                               ("method", "update"),
@@ -32,8 +32,17 @@ struct Options {
                               ("method", "stream")]))]
     path: Option<String>,
 
-    #[arg(help("The JSON value to send."))]
+    #[clap(help("The JSON value to send."))]
     value: Option<String>,
+
+    #[clap(
+        long,
+        help("When used with [list], filter by this prefix. Syntax is: <field>:<prefix>")
+    )]
+    prefix: Option<String>,
+
+    #[clap(long, help("When used with [list], limit to this many documents."))]
+    limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum, Eq, PartialEq, PartialOrd, Ord)]
@@ -56,6 +65,8 @@ async fn main() -> Result<()> {
         method,
         path,
         value,
+        prefix,
+        limit,
     } = Options::parse();
 
     dotenv::from_filename(dot_env).expect(".env");
@@ -77,23 +88,30 @@ async fn main() -> Result<()> {
 
     match method {
         Method::List => {
-            let (parent, name) = if let Some((parent, name)) = path.rsplit_once('/') {
-                (parent, name)
-            } else {
-                ("", path.as_str())
+            let res = match (limit, &prefix) {
+                (None, None) => {
+                    let (parent, name) = if let Some((parent, name)) = path.rsplit_once('/') {
+                        (parent, name)
+                    } else {
+                        ("", path.as_str())
+                    };
+
+                    client
+                        .list_documents(name)
+                        .parent(parent)
+                        .fetch_all()
+                        .await?
+                }
+                _ => query(&client, &path, prefix, limit).await?,
             };
 
-            let res = client
-                .list_documents(name)
-                .parent(parent)
-                .fetch_all()
-                .await?;
             let json_list = res
                 .into_iter()
                 .map(convert_document_fields_to_obj_with_id::<Value>)
                 .collect::<anyhow::Result<Vec<_>>>()
                 .expect("convert to json");
             let json = serde_json::to_string_pretty(&json_list)?;
+
             println!("{}", json);
         }
 
@@ -142,6 +160,39 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn query(
+    client: &FirebaseClient,
+    path: &str,
+    prefix: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<Document>> {
+    let q = client.run_query().from(path);
+
+    let q = if let Some(prefix) = prefix {
+        let (field, prefix) = if let Some((field, prefix)) = prefix.split_once(':') {
+            (field, prefix)
+        } else {
+            ("id", prefix.as_str())
+        };
+        let end_at = format!("{prefix}\u{fdff}");
+        q.order_by(field)
+            .ascending()
+            .start_at(prefix.to_string())
+            .end_at(end_at)
+            .done()
+    } else {
+        q
+    };
+
+    let q = if let Some(limit) = limit {
+        q.limit(limit as _)
+    } else {
+        q
+    };
+
+    q.fetch().await
 }
 
 async fn stream_collection(
