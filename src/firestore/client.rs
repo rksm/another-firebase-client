@@ -413,12 +413,12 @@ impl<'a> QueryOptions<'a> {
     }
 
     pub fn limit(mut self, limit: i32) -> Self {
-        self.structured_query.limit(limit);
+        self.structured_query.limit = Some(limit);
         self
     }
 
     pub fn offset(mut self, offset: i32) -> Self {
-        self.structured_query.offset(offset);
+        self.structured_query.offset = offset;
         self
     }
 
@@ -439,7 +439,7 @@ impl<'a> QueryOptions<'a> {
         field: S,
         op: structured_query::UnaryFilterOperator,
     ) -> Self {
-        self.structured_query.unary_filter(field, op);
+        self.structured_query.set_unary_filter(field, op);
         self
     }
 
@@ -453,7 +453,7 @@ impl<'a> QueryOptions<'a> {
         T: IntoFirestoreDocumentValue,
         S: ToString,
     {
-        self.structured_query.field_filter(field, op, value);
+        self.structured_query.set_field_filter(field, op, value);
         self
     }
 
@@ -462,7 +462,7 @@ impl<'a> QueryOptions<'a> {
         op: structured_query::CompositeFilterOperator,
         filters: Vec<structured_query::Filter>,
     ) -> Self {
-        self.structured_query.composite_filter(op, filters);
+        self.structured_query.set_composite_filter(op, filters);
         self
     }
 

@@ -8,7 +8,7 @@ pub type FieldFilterOperator = firestore::structured_query::field_filter::Operat
 pub type CompositeFilterOperator = firestore::structured_query::composite_filter::Operator;
 pub type Filter = firestore::structured_query::Filter;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StructuredQueryBuilder {
     pub order_by: Vec<firestore::structured_query::Order>,
     pub filter: Option<Filter>,
@@ -36,14 +36,19 @@ impl StructuredQueryBuilder {
         self.from_collections.push(collection_id.to_string())
     }
 
-    pub fn limit(&mut self, limit: i32) {
+    #[must_use]
+    pub fn limit(mut self, limit: i32) -> Self {
         self.limit = Some(limit);
+        self
     }
 
-    pub fn offset(&mut self, offset: i32) {
+    #[must_use]
+    pub fn offset(mut self, offset: i32) -> Self {
         self.offset = offset;
+        self
     }
 
+    #[must_use]
     pub fn order_by<S: ToString>(self, field: S) -> OrderBuilder<Self> {
         OrderBuilder::new(
             self,
@@ -56,11 +61,27 @@ impl StructuredQueryBuilder {
         )
     }
 
-    pub fn unary_filter<S: ToString>(&mut self, field: S, op: UnaryFilterOperator) {
+    #[must_use]
+    pub fn unary_filter<S: ToString>(mut self, field: S, op: UnaryFilterOperator) -> Self {
+        self.filter = Some(unary_filter(field, op));
+        self
+    }
+
+    pub fn set_unary_filter<S: ToString>(&mut self, field: S, op: UnaryFilterOperator) {
         self.filter = Some(unary_filter(field, op));
     }
 
-    pub fn field_filter<T, S>(&mut self, field: S, op: FieldFilterOperator, value: T)
+    #[must_use]
+    pub fn field_filter<T, S>(mut self, field: S, op: FieldFilterOperator, value: T) -> Self
+    where
+        T: IntoFirestoreDocumentValue,
+        S: ToString,
+    {
+        self.filter = Some(field_filter(field, op, value));
+        self
+    }
+
+    pub fn set_field_filter<T, S>(&mut self, field: S, op: FieldFilterOperator, value: T)
     where
         T: IntoFirestoreDocumentValue,
         S: ToString,
@@ -68,7 +89,13 @@ impl StructuredQueryBuilder {
         self.filter = Some(field_filter(field, op, value));
     }
 
-    pub fn composite_filter(&mut self, op: CompositeFilterOperator, filters: Vec<Filter>) {
+    #[must_use]
+    pub fn composite_filter(mut self, op: CompositeFilterOperator, filters: Vec<Filter>) -> Self {
+        self.filter = Some(composite_filter(op, filters));
+        self
+    }
+
+    pub fn set_composite_filter(&mut self, op: CompositeFilterOperator, filters: Vec<Filter>) {
         self.filter = Some(composite_filter(op, filters));
     }
 

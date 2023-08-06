@@ -93,14 +93,20 @@ impl ListenRequestBuilder {
     }
 
     #[must_use]
+    pub fn query(mut self, query: StructuredQueryBuilder) -> Self {
+        self.structured_query = query;
+        self
+    }
+
+    #[must_use]
     pub fn limit(mut self, limit: i32) -> Self {
-        self.structured_query.limit(limit);
+        self.structured_query.limit = Some(limit);
         self
     }
 
     #[must_use]
     pub fn offset(mut self, offset: i32) -> Self {
-        self.structured_query.offset(offset);
+        self.structured_query.offset = offset;
         self
     }
 
@@ -118,7 +124,7 @@ impl ListenRequestBuilder {
 
     #[must_use]
     pub fn unary_filter<S: ToString>(mut self, field: S, op: UnaryFilterOperator) -> Self {
-        self.structured_query.unary_filter(field, op);
+        self.structured_query.set_unary_filter(field, op);
         self
     }
 
@@ -128,7 +134,7 @@ impl ListenRequestBuilder {
         T: IntoFirestoreDocumentValue,
         S: ToString,
     {
-        self.structured_query.field_filter(field, op, value);
+        self.structured_query.set_field_filter(field, op, value);
         self
     }
 
