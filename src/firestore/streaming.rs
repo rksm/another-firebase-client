@@ -40,6 +40,8 @@ pub struct ListenRequestBuilder {
     resume_token: Option<Vec<u8>>,
     once: bool,
     structured_query: StructuredQueryBuilder,
+    restart_after_inactivity: std::time::Duration,
+    disable_restart_after_inactivity: bool,
 }
 
 impl ListenRequestBuilder {
@@ -60,6 +62,8 @@ impl ListenRequestBuilder {
             resume_token: None,
             once: false,
             structured_query,
+            restart_after_inactivity: std::time::Duration::from_secs(60 * 10),
+            disable_restart_after_inactivity: false,
         }
     }
 
@@ -138,6 +142,20 @@ impl ListenRequestBuilder {
         self
     }
 
+    /// When the stream did not receive updates for `duration`, restart it.
+    #[must_use]
+    pub fn restart_after_inactivity(mut self, duration: std::time::Duration) -> Self {
+        self.restart_after_inactivity = duration;
+        self
+    }
+
+    /// When the stream did not receive updates for `duration`, restart it.
+    #[must_use]
+    pub fn disable_restart_after_inactivity(mut self) -> Self {
+        self.disable_restart_after_inactivity = true;
+        self
+    }
+
     pub async fn build(
         &mut self,
     ) -> Result<(CollectionStream<tonic::Status>, CollectionStreamController)> {
@@ -158,6 +176,8 @@ impl ListenRequestBuilder {
 
         let stream = async_stream::stream! {
             let mut retry_count = 0;
+            let disable_restart_after_inactivity = self.disable_restart_after_inactivity;
+            let restart_after_inactivity = self.restart_after_inactivity;
 
             'outer: loop {
                 if retry_count > 0 {
@@ -182,7 +202,6 @@ impl ListenRequestBuilder {
                 // the keep alive requests in the background happening anymore.
                 // Let's have our own keep alive that will restart the stream if
                 // it has not received an update for a while.
-                static MAX_NO_UPDATE_SECONDS: i64 = 60 * 10;
                 let mut check_interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
                 let mut last_update = Utc::now();
 
@@ -191,8 +210,8 @@ impl ListenRequestBuilder {
                         _ = check_interval.tick() => {
                             tracing::debug!("stream {:?} check", self.collection);
                             let last_update_duration = Utc::now() - last_update;
-                            if last_update_duration.num_seconds()
-                                > (MAX_NO_UPDATE_SECONDS + thread_rng().gen_range(-30..30))
+                            if !disable_restart_after_inactivity && last_update_duration.num_seconds()
+                                > (restart_after_inactivity.as_secs() as i64 + thread_rng().gen_range(0..15))
                             {
                                 tracing::warn!("stream {:?} has had no updates for {}, restarting", self.collection, last_update_duration);
                                 if let Err(err) = current_controller.stop().await {
