@@ -1,10 +1,9 @@
 use clap::Parser;
 use firebase_client::{
     admin_auth::{self, User},
-    auth, firestore,
+    auth::{self, GoogleAuth},
 };
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
 struct Opts {
@@ -16,6 +15,14 @@ struct Opts {
         value_parser = auth::GoogleServiceAccount::from_json_str
     )]
     google_service_account: auth::GoogleServiceAccount,
+
+    #[clap(subcommand)]
+    pub command: Command,
+}
+#[derive(Debug, Parser)]
+pub enum Command {
+    ListUsers,
+    LookupUser,
 }
 
 #[tokio::main]
@@ -27,11 +34,17 @@ async fn main() {
         )
         .init();
 
-    let _opts = Opts::parse();
+    let opts = Opts::parse();
     let auth = auth::auth_from_env_or_cli().expect("Failed to get auth");
-
     // let client = firestore::FirebaseClient::new(auth);
 
+    match opts.command {
+        Command::ListUsers => list_users(auth).await,
+        Command::LookupUser => lookup_user(auth).await,
+    }
+}
+
+async fn list_users(auth: GoogleAuth) {
     let stream = admin_auth::AccountBatchGet::new(auth.box_clone())
         .max_results(500)
         .fetch()
@@ -94,4 +107,14 @@ async fn main() {
     // https://www.googleapis.com/auth/cloud-platform
 
     // ...
+}
+
+async fn lookup_user(auth: GoogleAuth) {
+    let lookup = admin_auth::accounts_lookup::AccountLookup::new(auth)
+        .emails(["robert.krahn@gmail.com"])
+        .fetch()
+        .await
+        .expect("Failed to fetch");
+
+    println!("{:#?}", lookup);
 }

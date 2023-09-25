@@ -249,14 +249,14 @@ impl TokenVerification {
             return Err(TokenVerificationError::TokenMissingField("expires_at"));
         };
 
-        let issued_at = DateTime::<Utc>::from_utc(
+        let issued_at = DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDateTime::from_timestamp_millis(issued_at.as_millis() as i64).ok_or_else(
                 || TokenVerificationError::TokenMissingField("issued_at (invalid timestamp)"),
             )?,
             Utc,
         );
 
-        let expires_at = DateTime::<Utc>::from_utc(
+        let expires_at = DateTime::<Utc>::from_naive_utc_and_offset(
             NaiveDateTime::from_timestamp_millis(expires_at.as_millis() as i64).ok_or_else(
                 || TokenVerificationError::TokenMissingField("expires_at (invalid timestamp)"),
             )?,
