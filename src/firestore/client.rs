@@ -477,11 +477,15 @@ impl<'a> QueryOptions<'a> {
                 Err(err) => {
                     tracing::error!("[firestore query] error querying for document {}", err);
                 }
-                Ok(RunQueryResponse { document, .. }) => {
+                Ok(RunQueryResponse {
+                    document,
+                    skipped_results,
+                    ..
+                }) => {
                     if let Some(document) = document {
                         result.push(document);
                     } else {
-                        tracing::warn!("[firestore query] no document for user");
+                        tracing::warn!(%skipped_results, "[firestore query] no document for user");
                     }
                 }
             }

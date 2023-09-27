@@ -76,6 +76,7 @@ impl AccountLookup {
             uids,
             phone_numbers,
         } = self;
+
         let req = AccountsLookupRequest {
             emails: if emails.is_empty() {
                 None
@@ -90,7 +91,9 @@ impl AccountLookup {
                 Some(phone_numbers)
             },
         };
+
         let response = account_lookup(&auth, req).await?;
+
         Ok(response.users)
     }
 }
