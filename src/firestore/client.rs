@@ -14,6 +14,7 @@ use itertools::Itertools;
 
 use super::conversion::{IntoFirestoreDocument, IntoFirestoreDocumentValue};
 use super::structured_query::{self, StructuredQueryBuilder};
+use super::FromFirestoreDocument;
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -730,6 +731,35 @@ impl FirebaseClient {
         GetDocumentOptions::new(self, name.to_string())
     }
 
+    /// Convenience for `get_document` accepting collection and id separately
+    /// and converting the result.
+    pub async fn get_document_of_collection<T>(
+        &self,
+        col: impl AsRef<str>,
+        id: impl AsRef<str>,
+    ) -> Result<T>
+    where
+        T: FromFirestoreDocument,
+        T::Err: Into<anyhow::Error>,
+    {
+        let col_name = col.as_ref();
+        let id = id.as_ref();
+        let doc = match self.get_document(&format!("{col_name}/{id}")).fetch().await {
+            Err(err) => {
+                tracing::error!("Unable to get doc from firebase: {err}");
+                return Err(err);
+            }
+            Ok(doc) => doc,
+        };
+        match T::convert_doc(doc) {
+            Err(err) => {
+                tracing::error!("Unable to convert document {col_name}/{id:?}: {err}");
+                Err(err.into())
+            }
+            Ok(doc) => Ok(doc),
+        }
+    }
+
     pub fn delete_document<S: ToString>(&self, name: S) -> DeleteDocumentOptions<'_> {
         DeleteDocumentOptions::new(self, name.to_string())
     }
@@ -744,6 +774,16 @@ impl FirebaseClient {
 
     pub fn batch_update(&self) -> BatchUpdateDocumentOptions<'_> {
         BatchUpdateDocumentOptions::new(self)
+    }
+
+    /// Convenience method that allows to fetch a document, modify it using a
+    /// callback and then store the updated variant again.
+    pub fn fetch_and_update<'a>(
+        &'a self,
+        col: &'a str,
+        id: &'a str,
+    ) -> super::fetch_and_update::FetchAndUpdate<'a> {
+        super::fetch_and_update::FetchAndUpdate::new(self, col, id)
     }
 
     pub fn run_query(&self) -> QueryOptions {

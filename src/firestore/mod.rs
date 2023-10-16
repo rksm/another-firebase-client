@@ -1,6 +1,7 @@
 pub mod client;
 pub mod collection;
 pub mod conversion;
+mod fetch_and_update;
 pub mod streaming;
 pub mod structured_query;
 

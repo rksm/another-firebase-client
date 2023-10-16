@@ -56,7 +56,7 @@ impl RdbClient {
 
         let client = reqwest::Client::new().request(method, url);
         let mut client = if let Some(token) = self.auth.get_token().await? {
-            client.bearer_auth(&token)
+            client.bearer_auth(token)
         } else {
             client
         };
@@ -73,12 +73,12 @@ impl RdbClient {
             return Ok(res);
         }
         let message = res.text().await.unwrap_or_else(|_| String::new());
-        return Err(anyhow::anyhow!(
+        Err(anyhow::anyhow!(
             "Error putting {}:\nStatus={}\nmessage={}",
             path.as_ref(),
             status,
             message
-        ));
+        ))
     }
 
     pub async fn get_path<T: serde::de::DeserializeOwned>(&mut self, path: &str) -> Result<T> {
