@@ -11,6 +11,10 @@ path = "src/bin/rdb-client.rs"
 name = "firestore-client"
 path = "src/bin/firestore-client.rs"
 
+[[bin]]
+name = "rdb-client"
+path = "src/bin/rdb-client.rs"
+
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
