@@ -486,7 +486,7 @@ impl<'a> QueryOptions<'a> {
                     if let Some(document) = document {
                         result.push(document);
                     } else {
-                        tracing::warn!(%skipped_results, "[firestore query] no document for user");
+                        tracing::debug!(%skipped_results, "[firestore query] no document found");
                     }
                 }
             }
