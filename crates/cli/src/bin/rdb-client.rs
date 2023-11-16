@@ -1,5 +1,5 @@
-use eyre::Result;
 use clap::{Parser, ValueEnum};
+use firebase_client::RealtimeDBError;
 use futures::StreamExt;
 
 #[derive(Parser)]
@@ -42,7 +42,7 @@ enum Method {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), RealtimeDBError> {
     tracing_subscriber::fmt::init();
 
     let args = Options::parse();

@@ -16,6 +16,9 @@ pub enum FirestoreError {
 
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
+
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] FirestoreConversionError),
 }
 
 #[derive(thiserror::Error, Debug)]

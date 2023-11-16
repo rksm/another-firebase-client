@@ -1,8 +1,10 @@
 use clap::{Parser, ValueEnum};
-use eyre::Result;
-use firebase_client::firestore::{
-    collection::CachedCollection, conversion::convert_document_fields_to_obj_with_id,
-    types::Document, FirebaseClient, FromFirestoreDocument,
+use firebase_client::{
+    firestore::{
+        collection::CachedCollection, conversion::convert_document_fields_to_obj_with_id,
+        types::Document, FirebaseClient, FromFirestoreDocument,
+    },
+    FirestoreError,
 };
 use futures::StreamExt;
 use serde_json::Value;
@@ -56,7 +58,7 @@ enum Method {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), FirestoreError> {
     tracing_subscriber::fmt::init();
 
     let Options {
@@ -108,7 +110,8 @@ async fn main() -> Result<()> {
             let json_list = res
                 .into_iter()
                 .map(convert_document_fields_to_obj_with_id::<Value>)
-                .collect::<eyre::Result<Vec<_>>>()
+                .map(|res| res.map_err(|err| err.into()))
+                .collect::<Result<Vec<_>, FirestoreError>>()
                 .expect("convert to json");
             let json = serde_json::to_string_pretty(&json_list)?;
 
@@ -145,7 +148,7 @@ async fn main() -> Result<()> {
         Method::Stream => {
             let data_dir = match data_dir {
                 None => {
-                    return Err(eyre::eyre!("Need --data-dir for streaming"));
+                    panic!("Need --data-dir for streaming");
                 }
                 Some(data_dir) => data_dir,
             };
@@ -167,7 +170,7 @@ async fn query(
     path: &str,
     prefix: Option<String>,
     limit: Option<usize>,
-) -> Result<Vec<Document>> {
+) -> Result<Vec<Document>, FirestoreError> {
     let q = client.run_query().from(path);
 
     let q = if let Some(prefix) = prefix {
@@ -199,7 +202,7 @@ async fn stream_collection(
     client: FirebaseClient,
     data_dir: impl AsRef<Path>,
     collection: impl ToString,
-) -> Result<()> {
+) -> Result<(), FirestoreError> {
     let collection = collection.to_string();
     let cache_file = format!("{}-collection.json", collection);
     let mut builder = client.stream_builder(collection.to_string());
@@ -207,8 +210,11 @@ async fn stream_collection(
     let cache_file = data_dir.as_ref().join(cache_file);
 
     let mut collection = if cache_file.exists() {
-        let file = std::fs::OpenOptions::new().read(true).open(cache_file)?;
-        serde_json::from_reader(file)?
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .open(cache_file)
+            .expect("open file");
+        serde_json::from_reader(file).expect("deserialize cache")
     } else {
         CachedCollection::<Value>::new(collection.to_string())
     };
@@ -218,7 +224,7 @@ async fn stream_collection(
         builder = builder.resume_token(resume_token.clone());
     }
 
-    let (mut stream, mut ctrl) = builder.build_retry(3).await?;
+    let (mut stream, ctrl) = builder.build_retry(3).await?;
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -258,7 +264,7 @@ async fn stream_collection(
 
         println!("Got {} new/changed documents", update.documents.len());
         collection.update_from(update);
-        collection.save()?;
+        collection.save().expect("save cache");
         println!("Have {} documents in total", collection.documents.len());
 
         for (id, doc) in &collection.documents {

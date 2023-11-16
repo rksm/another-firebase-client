@@ -1,5 +1,5 @@
-use eyre::Result;
 use clap::Parser;
+use eyre::Result;
 use firebase_client::auth::{Authorization, EmailSignin, WebUserAuth};
 use firebase_client::firestore::FromFirestoreDocument;
 use firebase_client::{
@@ -75,31 +75,33 @@ impl CoScreenSessionConnection {
     }
 
     pub async fn join_waiting(&self) -> Result<()> {
-        let mut rdb = self.rdb_client.get_connection().await?;
-        let mut tx = rdb.transaction().await?;
+        unimplemented!("join_waiting");
 
-        let mut waiting = tx
-            .get::<_, Value>(&format!("coscreens/{}/waiting", self.id))
-            .await?;
-        let mut connected = tx
-            .get::<_, Value>(&format!("coscreens/{}/connected", self.id))
-            .await?;
+        // let mut rdb = self.rdb_client.get_connection().await?;
+        // let mut tx = rdb.transaction().await?;
 
-        let mut waiting = waiting.as_array_mut().unwrap();
-        let mut connected = connected.as_array_mut().unwrap();
+        // let mut waiting = tx
+        //     .get::<_, Value>(&format!("coscreens/{}/waiting", self.id))
+        //     .await?;
+        // let mut connected = tx
+        //     .get::<_, Value>(&format!("coscreens/{}/connected", self.id))
+        //     .await?;
 
-        let mut session = waiting.pop().unwrap();
-        let session_id = session["id"].as_str().unwrap().to_string();
+        // let mut waiting = waiting.as_array_mut().unwrap();
+        // let mut connected = connected.as_array_mut().unwrap();
 
-        connected.push(session);
+        // let mut session = waiting.pop().unwrap();
+        // let session_id = session["id"].as_str().unwrap().to_string();
 
-        tx.set(&format!("coscreens/{}/waiting", self.id), waiting)
-            .await?;
-        tx.set(&format!("coscreens/{}/connected", self.id), connected)
-            .await?;
+        // connected.push(session);
 
-        tx.commit().await?;
+        // tx.set(&format!("coscreens/{}/waiting", self.id), waiting)
+        //     .await?;
+        // tx.set(&format!("coscreens/{}/connected", self.id), connected)
+        //     .await?;
 
-        Ok(())
+        // tx.commit().await?;
+
+        // Ok(())
     }
 }
