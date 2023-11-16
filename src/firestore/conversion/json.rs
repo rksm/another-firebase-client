@@ -1,19 +1,21 @@
-use super::{
-    FromFirestoreDocument, FromFirestoreValue, IntoFirestoreDocument, IntoFirestoreDocumentValue,
-};
-use anyhow::Result;
 use firestore_grpc::v1 as firestore;
 use prost_types::Timestamp;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Number, Value};
 use std::collections::HashMap;
 
+use crate::FirestoreConversionError;
+
+use super::{
+    FromFirestoreDocument, FromFirestoreValue, IntoFirestoreDocument, IntoFirestoreDocumentValue,
+};
+
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 impl FromFirestoreValue for Value {
-    type Err = anyhow::Error;
+    type Err = FirestoreConversionError;
 
-    fn convert(val: firestore::Value) -> Result<Value> {
+    fn convert(val: firestore::Value) -> Result<Value, FirestoreConversionError> {
         let result = match val.value_type {
             None => Value::Null,
             Some(firestore::value::ValueType::NullValue(_)) => Value::Null,
@@ -75,9 +77,9 @@ impl FromFirestoreValue for Value {
 }
 
 impl FromFirestoreDocument for Value {
-    type Err = anyhow::Error;
+    type Err = FirestoreConversionError;
 
-    fn convert_doc(doc: firestore::Document) -> Result<Value> {
+    fn convert_doc(doc: firestore::Document) -> Result<Value, FirestoreConversionError> {
         let firestore::Document {
             create_time,
             update_time,
@@ -152,17 +154,20 @@ impl IntoFirestoreDocumentValue for Value {
 }
 
 impl IntoFirestoreDocument for Value {
-    type Err = anyhow::Error;
+    type Err = FirestoreConversionError;
 
     /// self are the fields of the document, not the document itself
-    fn into_document_from_fields(self) -> Result<firestore::Document> {
+    fn into_document_from_fields(self) -> Result<firestore::Document, Self::Err> {
         let fields = if let Value::Object(obj) = self {
             HashMap::from_iter(
                 obj.into_iter()
                     .map(|(key, val)| (key, val.into_document_value())),
             )
         } else {
-            return Err(anyhow::anyhow!("{:?} is not an object", self));
+            return Err(FirestoreConversionError::IntoFirestoreError(format!(
+                "{:?} is not an object",
+                self
+            )));
         };
 
         Ok(firestore::Document {
@@ -175,7 +180,9 @@ impl IntoFirestoreDocument for Value {
         let name = if let Value::String(name) = self["name"].clone() {
             name
         } else {
-            return Err(anyhow::anyhow!("name is not a string"));
+            return Err(FirestoreConversionError::IntoFirestoreError(format!(
+                "name is not a string"
+            )));
         };
         let fields = if let Some(value @ Value::Object(..)) = self.get_mut("fields") {
             value
@@ -183,7 +190,9 @@ impl IntoFirestoreDocument for Value {
                 .into_document_from_fields()
                 .map(|doc| doc.fields)?
         } else {
-            return Err(anyhow::anyhow!("fields is not an object"));
+            return Err(FirestoreConversionError::IntoFirestoreError(format!(
+                "fields is not an object"
+            )));
         };
         let create_time = match self.get("create_time") {
             Some(Value::Number(millis)) if millis.as_u64().is_some() => {
@@ -219,7 +228,9 @@ impl IntoFirestoreDocument for Value {
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-pub fn convert_document_fields_to_obj<T>(doc: firestore::Document) -> Result<T>
+pub fn convert_document_fields_to_obj<T>(
+    doc: firestore::Document,
+) -> Result<T, FirestoreConversionError>
 where
     T: DeserializeOwned,
 {
@@ -230,12 +241,15 @@ where
     let json = serde_json::Value::convert(fields)?;
     let obj = match serde_json::from_value(json.clone()) {
         Err(err) => {
-            eprintln!(
-                "errror {} when converting {}",
+            tracing::error!(
+                "error {} when converting {}",
                 err,
                 serde_json::to_string_pretty(&json).unwrap(),
             );
-            return Err(err.into());
+            return Err(FirestoreConversionError::FromFirestoreError(format!(
+                "error {} when converting document",
+                err,
+            )));
         }
         Ok(obj) => obj,
     };
@@ -243,7 +257,9 @@ where
     Ok(obj)
 }
 
-pub fn convert_document_fields_to_obj_with_id<T>(doc: firestore::Document) -> Result<T>
+pub fn convert_document_fields_to_obj_with_id<T>(
+    doc: firestore::Document,
+) -> Result<T, FirestoreConversionError>
 where
     T: DeserializeOwned,
 {
@@ -259,6 +275,18 @@ where
         value_type: Some(firestore::value::ValueType::MapValue(fields)),
     };
     let json = serde_json::Value::convert(fields)?;
-    let obj = serde_json::from_value(json)?;
+    let obj = serde_json::from_value(json).map_err(|err| {
+        // tracing::error!(
+        //     "error {} when converting {}",
+        //     err,
+        //     serde_json::to_string_pretty(&json).unwrap(),
+        // );
+        tracing::error!("error {err} when converting");
+        FirestoreConversionError::FromFirestoreError(format!(
+            "error {} when converting document",
+            err,
+        ))
+    })?;
+
     Ok(obj)
 }

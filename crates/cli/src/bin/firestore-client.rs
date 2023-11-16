@@ -1,5 +1,5 @@
-use anyhow::Result;
 use clap::{Parser, ValueEnum};
+use eyre::Result;
 use firebase_client::firestore::{
     collection::CachedCollection, conversion::convert_document_fields_to_obj_with_id,
     types::Document, FirebaseClient, FromFirestoreDocument,
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
             let json_list = res
                 .into_iter()
                 .map(convert_document_fields_to_obj_with_id::<Value>)
-                .collect::<anyhow::Result<Vec<_>>>()
+                .collect::<eyre::Result<Vec<_>>>()
                 .expect("convert to json");
             let json = serde_json::to_string_pretty(&json_list)?;
 
@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
         Method::Stream => {
             let data_dir = match data_dir {
                 None => {
-                    return Err(anyhow::anyhow!("Need --data-dir for streaming"));
+                    return Err(eyre::eyre!("Need --data-dir for streaming"));
                 }
                 Some(data_dir) => data_dir,
             };
@@ -226,7 +226,7 @@ async fn stream_collection(
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
             println!("STOPPING");
-            ctrl.stop().await.unwrap();
+            ctrl.stop().await;
         });
     }
 

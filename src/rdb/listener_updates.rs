@@ -1,5 +1,6 @@
-use anyhow::Result;
 use serde_json::{json, Map, Value};
+
+use crate::RealtimeDBError;
 
 /// `ObservedValue` holds the state received by a realtime db listener and
 /// updates it when changes come in.
@@ -15,18 +16,18 @@ impl ObservedValue {
         Self(value)
     }
 
-    pub fn apply_put(self, action: PutAction) -> Result<(Vec<String>, Self)> {
+    pub fn apply_put(self, action: PutAction) -> Result<(Vec<String>, Self), RealtimeDBError> {
         let PutAction { path, data } = action;
         let value = apply_put(&path, self.0, data)?;
         Ok((path, Self(value)))
     }
 
-    pub fn apply_patch(self, action: PatchAction) -> Result<(Vec<String>, Self)> {
+    pub fn apply_patch(self, action: PatchAction) -> Result<(Vec<String>, Self), RealtimeDBError> {
         let PatchAction { path, data } = action;
 
         let patch_value = match data {
             Value::Object(obj) => obj,
-            _ => return Err(anyhow::anyhow!("put value is not an object")),
+            _ => return Err(RealtimeDBError::Other("put value is not an object")),
         };
 
         // keys of the object we receive can contain '/' like {"a/b/c": {...}}.
@@ -109,7 +110,7 @@ where
     }
 }
 
-fn apply_put(path: &[String], data: Value, put_value: Value) -> Result<Value> {
+fn apply_put(path: &[String], data: Value, put_value: Value) -> Result<Value, RealtimeDBError> {
     modify_path(path, data, move |_| put_value)
 }
 
@@ -145,7 +146,7 @@ fn merge_values(a: Value, b: Value) -> Value {
     }
 }
 
-fn apply_patch(path: &[String], data: Value, patch_value: Value) -> Result<Value> {
+fn apply_patch(path: &[String], data: Value, patch_value: Value) -> Result<Value, RealtimeDBError> {
     tracing::trace!(
         "[apply_patch] patch={:?} data={:?} patch={:?}",
         path,
@@ -166,7 +167,7 @@ fn modify_path(
     path: &[String],
     data: Value,
     apply_fn: impl FnOnce(Value) -> Value,
-) -> Result<Value> {
+) -> Result<Value, RealtimeDBError> {
     let mut stack = Vec::new();
 
     let mut current = data;
@@ -221,14 +222,18 @@ fn modify_path(
             let arr = value.as_array_mut().unwrap();
             let index = match p {
                 Key::Number(index) => index,
-                _ => return Err(anyhow::anyhow!("Expected key to be index into array")),
+                _ => {
+                    return Err(RealtimeDBError::Other(
+                        "Expected key to be index into array",
+                    ))
+                }
             };
             arr[index] = current;
         } else {
             let obj = value.as_object_mut().unwrap();
             let key = match p {
                 Key::String(key) => key,
-                _ => return Err(anyhow::anyhow!("Expected key to be string")),
+                _ => return Err(RealtimeDBError::Other("Expected key to be string")),
             };
 
             obj.insert(key.to_string(), current);
@@ -256,9 +261,8 @@ fn parse_path(path: String) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::{parse_path, ObservedValue};
-    use crate::rdb::listener_updates::PatchAction;
+    use crate::{rdb::listener_updates::PatchAction, RealtimeDBError};
 
-    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use serde_json::{json, Value};
 
@@ -266,21 +270,21 @@ mod tests {
     // parse path
 
     #[test]
-    fn parse_path_root() -> Result<()> {
+    fn parse_path_root() -> Result<(), RealtimeDBError> {
         let result = parse_path("/".to_string());
         assert_eq!(result, Vec::<&str>::new());
         Ok(())
     }
 
     #[test]
-    fn parse_path_one_component() -> Result<()> {
+    fn parse_path_one_component() -> Result<(), RealtimeDBError> {
         let result = parse_path("/foo".to_string());
         assert_eq!(result, vec!["foo"]);
         Ok(())
     }
 
     #[test]
-    fn parse_path_with_number() -> Result<()> {
+    fn parse_path_with_number() -> Result<(), RealtimeDBError> {
         let result = parse_path("/foo/3/bar".to_string());
         assert_eq!(result, vec!["foo", "3", "bar"]);
         Ok(())
@@ -290,7 +294,7 @@ mod tests {
     // put
 
     #[test]
-    fn put_value() -> Result<()> {
+    fn put_value() -> Result<(), RealtimeDBError> {
         let action = ("", Value::Number(1.into())).into();
         let (_path, val) = ObservedValue::new().apply_put(action)?;
         assert_eq!(val.0, json![1]);
@@ -298,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn put_value_path() -> Result<()> {
+    fn put_value_path() -> Result<(), RealtimeDBError> {
         let action = ("/foo", Value::Number(1.into())).into();
         let (_path, val) = ObservedValue::new().apply_put(action)?;
         assert_eq!(val.0, json![{"foo": 1}]);
@@ -306,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn put_path() -> Result<()> {
+    fn put_path() -> Result<(), RealtimeDBError> {
         let action = ("/a/b", Value::Null).into();
         let (_path, val) = ObservedValue::new().apply_put(action)?;
         assert_eq!(val.0, json![{"a": {"b": null}}]);
@@ -314,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn put_null() -> Result<()> {
+    fn put_null() -> Result<(), RealtimeDBError> {
         let action = ("/", Value::Null).into();
         let (_path, val) = ObservedValue::value(json![{"a": 1}]).apply_put(action)?;
         assert_eq!(val.0, Value::Null);
@@ -322,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn put_overwrite() -> Result<()> {
+    fn put_overwrite() -> Result<(), RealtimeDBError> {
         let action = ("/foo/bar/baz", json![{"hello": "world"}]).into();
         let (_path, val) = ObservedValue::value(json![{"foo": 1}]).apply_put(action)?;
         assert_eq!(val.0, json![{ "foo": {"bar": {"baz": {"hello": "world"}}}}]);
@@ -330,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn put_array() -> Result<()> {
+    fn put_array() -> Result<(), RealtimeDBError> {
         let action = ("/foo", json![[1, 2, 3]]).into();
         let (_path, val) = ObservedValue::value(json![{"foo": 1}]).apply_put(action)?;
         assert_eq!(val.0, json![{ "foo": [1,2,3]}]);
@@ -338,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn put_array_value() -> Result<()> {
+    fn put_array_value() -> Result<(), RealtimeDBError> {
         let action = ("foo/1", json!["hello"]).into();
         let (_path, val) = ObservedValue::value(json![{"foo": [1, 2, 3]}]).apply_put(action)?;
         assert_eq!(val.0, json![{ "foo": [1,"hello",3]}]);
@@ -346,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn put_array_value_outside() -> Result<()> {
+    fn put_array_value_outside() -> Result<(), RealtimeDBError> {
         let action = ("foo/3", json![23]).into();
         let (_path, val) = ObservedValue::value(json![{"foo": [1]}]).apply_put(action)?;
         assert_eq!(val.0, json![{"foo": [1, null, null, 23]}]);
@@ -354,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn put_array_value_outside_2() -> Result<()> {
+    fn put_array_value_outside_2() -> Result<(), RealtimeDBError> {
         let action = ("foo/1", json![23]).into();
         let (_path, val) = ObservedValue::value(json![{"foo": [1]}]).apply_put(action)?;
         assert_eq!(val.0, json![{"foo": [1, 23]}]);
@@ -362,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn put_into_array() -> Result<()> {
+    fn put_into_array() -> Result<(), RealtimeDBError> {
         let action = ("/test/foo", json![[1, 2]]).into();
         let (_path, val) = ObservedValue::value(json![{"test": [1,2]}]).apply_put(action)?;
         assert_eq!(val.0, json![{"test": {"0": 1, "1": 2, "foo": [1,2]}}]);
@@ -373,7 +377,7 @@ mod tests {
     // "deep" keys
 
     #[test]
-    fn patch_action_nested_path() -> Result<()> {
+    fn patch_action_nested_path() -> Result<(), RealtimeDBError> {
         let val = json![{"a":{"b":{"foo": 23}}}];
         let path = "/";
         let data = json![{"a/b":{"foo": 23}}];
@@ -384,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn patch_action_nested_path_2() -> Result<()> {
+    fn patch_action_nested_path_2() -> Result<(), RealtimeDBError> {
         let path = "/";
         let start_val = json![{"a": {"b": {"c": 3}, "e": 5}, "d": 4}];
         let patch_val = json![{"a/b/e": {"x": 23}}];
@@ -400,7 +404,7 @@ mod tests {
     // patch
 
     #[test]
-    fn patch_null() -> Result<()> {
+    fn patch_null() -> Result<(), RealtimeDBError> {
         let action = ("/", json![{"foo":1}]).into();
         let (_path, val) = ObservedValue::new().apply_patch(action)?;
         assert_eq!(val.0, json![{"foo": 1}]);
@@ -408,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn patch_object() -> Result<()> {
+    fn patch_object() -> Result<(), RealtimeDBError> {
         let action = ("/", json![{"foo":1, "zork": 9}]).into();
         let (_path, val) = ObservedValue::value(json![{"foo": 3, "bar": 4}]).apply_patch(action)?;
         assert_eq!(val.0, json![{"foo": 1, "bar": 4, "zork": 9}]);
@@ -416,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn patch_number() -> Result<()> {
+    fn patch_number() -> Result<(), RealtimeDBError> {
         let action = ("/bar", json![{"foo":1}]).into();
         let (_path, val) = ObservedValue::value(json![{"bar": 1}]).apply_patch(action)?;
         assert_eq!(val.0, json![{"bar": {"foo": 1}}]);
@@ -424,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn patch_array() -> Result<()> {
+    fn patch_array() -> Result<(), RealtimeDBError> {
         let action = ("/", json![{"foo":1}]).into();
         let (_path, val) = ObservedValue::value(json![[1]]).apply_patch(action)?;
         assert_eq!(val.0, json![{"0": 1, "foo": 1}]);

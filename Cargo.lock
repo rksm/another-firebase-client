@@ -554,6 +554,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "eyre"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c2b6b5a29c02cdc822728b7d7b8ae1bab3e3b05d44522770ddd49722eeac7eb"
+dependencies = [
+ "indenter",
+ "once_cell",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -573,7 +583,6 @@ dependencies = [
 name = "firebase-client"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-stream",
  "chrono",
  "eventsource-client",
@@ -590,6 +599,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-env-log",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -600,7 +610,6 @@ dependencies = [
 name = "firebase-client-admin-auth"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-stream",
  "async-trait",
  "base64 0.21.4",
@@ -626,7 +635,6 @@ dependencies = [
 name = "firebase-client-auth"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
  "jsonwebtoken",
@@ -644,7 +652,6 @@ dependencies = [
 name = "firebase-client-cli"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "dotenv",
  "firebase-client",
@@ -1089,6 +1096,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indenter"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1142,8 +1155,8 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 name = "join-session-example"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
+ "eyre",
  "firebase-client",
  "serde",
  "serde_json",

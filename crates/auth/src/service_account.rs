@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::path::Path;
@@ -24,27 +23,34 @@ pub struct GoogleServiceAccount {
 }
 
 impl GoogleServiceAccount {
-    pub fn from_file<P: AsRef<Path>>(service_account_file: P) -> Result<Self> {
-        let service_account_file = std::fs::File::open(service_account_file)?;
+    pub fn from_file<P: AsRef<Path>>(service_account_file: P) -> Result<Self, GCloudAuthError> {
+        let service_account_file = std::fs::File::open(service_account_file).map_err(|e| {
+            GCloudAuthError::CredentialsError(format!("cannot open service account file: {}", e))
+        })?;
         let account = serde_json::from_reader(service_account_file)?;
         Ok(account)
     }
 
-    pub fn from_json(json: serde_json::Value) -> Result<Self> {
+    pub fn from_json(json: serde_json::Value) -> Result<Self, GCloudAuthError> {
         Ok(serde_json::from_value(json)?)
     }
 
-    pub fn from_json_str(json: &str) -> Result<Self> {
+    pub fn from_json_str(json: &str) -> Result<Self, GCloudAuthError> {
         Ok(serde_json::from_str(json)?)
     }
 
-    pub fn from_env_var<S: AsRef<str>>(name: S) -> Result<Self> {
-        let env_var_content = std::env::var(name.as_ref())
-            .map_err(|e| anyhow::anyhow!("environment variable {}: {}", name.as_ref(), e))?;
+    pub fn from_env_var<S: AsRef<str>>(name: S) -> Result<Self, GCloudAuthError> {
+        let env_var_content = std::env::var(name.as_ref()).map_err(|e| {
+            GCloudAuthError::CredentialsError(format!(
+                "cannot read environment variable {}: {}",
+                name.as_ref(),
+                e
+            ))
+        })?;
         Self::from_json_str(&env_var_content)
     }
 
-    pub fn from_default_env_var() -> Result<Self> {
+    pub fn from_default_env_var() -> Result<Self, GCloudAuthError> {
         Self::from_env_var("GOOGLE_SERVICE_ACCOUNT")
     }
 

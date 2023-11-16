@@ -1,4 +1,4 @@
-use anyhow::Result;
+use eyre::Result;
 use clap::{Parser, ValueEnum};
 use futures::StreamExt;
 

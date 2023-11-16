@@ -1,4 +1,4 @@
-use anyhow::Result;
+use eyre::Result;
 use clap::Parser;
 use firebase_client::auth::{Authorization, EmailSignin, WebUserAuth};
 use firebase_client::firestore::FromFirestoreDocument;

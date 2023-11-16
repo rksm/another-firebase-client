@@ -1,4 +1,3 @@
-use anyhow::Result;
 use chrono::prelude::*;
 use firestore_grpc::v1 as firestore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -6,6 +5,8 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+
+use crate::CachedCollectionError;
 
 use super::{conversion::FromFirestoreDocument, FirebaseClient};
 
@@ -77,7 +78,10 @@ impl<T> CachedCollection<T>
 where
     T: DeserializeOwned,
 {
-    pub fn ensure<P: AsRef<Path>, S: ToString>(collection: S, data_dir: P) -> Result<Self> {
+    pub fn ensure<P: AsRef<Path>, S: ToString>(
+        collection: S,
+        data_dir: P,
+    ) -> Result<Self, CachedCollectionError> {
         let collection_name = collection.to_string();
         let cache_file_name = format!("{}-collection.json", collection_name);
         let cache_file = data_dir.as_ref().join(cache_file_name);
@@ -104,7 +108,7 @@ where
         Ok(collection)
     }
 
-    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, CachedCollectionError> {
         tracing::debug!("loading from file {}", path.as_ref().display());
         let file = std::fs::OpenOptions::new().read(true).open(&path)?;
         let mut loaded: Self = serde_json::from_reader(file)?;
@@ -117,13 +121,11 @@ impl<T> CachedCollection<T>
 where
     T: FromFirestoreDocument + Serialize,
 {
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<(), CachedCollectionError> {
         let file = match &self.cache_file {
             None => {
-                return Err(anyhow::anyhow!(
-                    "cannot save cached collection {}, no cache file",
-                    self.name
-                ))
+                tracing::error!("cannot save cached collection {}, no cache file", self.name);
+                return Err(CachedCollectionError::NoCacheFile);
             }
             Some(file) => file,
         };
@@ -161,7 +163,7 @@ where
         changed_docs
     }
 
-    pub async fn fill(&mut self, client: &FirebaseClient) -> Result<usize> {
+    pub async fn fill(&mut self, client: &FirebaseClient) -> Result<usize, CachedCollectionError> {
         let docs = client
             .list_documents(&self.name)
             .page_size(300)

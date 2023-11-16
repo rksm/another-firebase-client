@@ -1,10 +1,11 @@
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use firestore_grpc::v1::{self as firestore, value::ValueType};
 use std::fmt::{Debug, Display};
 
 pub mod json;
 pub use json::*;
+
+use crate::FirestoreConversionError;
 
 pub trait FromFirestoreDocument: Sized {
     type Err: Debug + Display;
@@ -27,13 +28,13 @@ pub trait IntoFirestoreDocument {
 }
 
 impl IntoFirestoreDocument for firestore::Document {
-    type Err = anyhow::Error;
+    type Err = FirestoreConversionError;
 
-    fn into_document_from_fields(self) -> Result<Self> {
+    fn into_document_from_fields(self) -> Result<Self, Self::Err> {
         Ok(self)
     }
 
-    fn into_document(self) -> Result<Self> {
+    fn into_document(self) -> Result<Self, Self::Err> {
         Ok(self)
     }
 }

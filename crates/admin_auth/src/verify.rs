@@ -15,13 +15,13 @@ pub enum TokenVerificationError {
     #[error("uid mismatch")]
     UidMismatch,
     #[error("failed to decode token: {0}")]
-    TokenDecodeFailure(anyhow::Error),
+    TokenDecodeFailure(#[from] jwt_simple::Error),
     #[error("unsupported algorithm: {0}")]
     UnsupportedAlgorithm(String),
     #[error("failed to parse public key")]
     PublicKeyParseError(#[from] x509_certificate::X509CertificateError),
     #[error("failed to verify token: {0}")]
-    TokenVerificationFailure(anyhow::Error),
+    TokenVerificationFailure(String),
     #[error("expected token to have field {0}")]
     TokenMissingField(&'static str),
 }
@@ -227,19 +227,17 @@ impl TokenVerification {
         })?;
 
         // step 3: verify token
-        let claims = key
-            .verify_token::<CustomClaims>(
-                &token,
-                Some(VerificationOptions {
-                    required_subject,
-                    allowed_issuers: Some(
-                        [format!("https://securetoken.google.com/{project_id}")].into(),
-                    ),
-                    allowed_audiences: Some([project_id.to_string()].into()),
-                    ..Default::default()
-                }),
-            )
-            .map_err(TokenVerificationError::TokenVerificationFailure)?;
+        let claims = key.verify_token::<CustomClaims>(
+            &token,
+            Some(VerificationOptions {
+                required_subject,
+                allowed_issuers: Some(
+                    [format!("https://securetoken.google.com/{project_id}")].into(),
+                ),
+                allowed_audiences: Some([project_id.to_string()].into()),
+                ..Default::default()
+            }),
+        )?;
 
         // step 4: extract claims / custom claims
         let Some(issued_at) = claims.issued_at else {

@@ -1,4 +1,3 @@
-use anyhow::Result;
 pub use firestore_grpc::google::firestore::v1::ListDocumentsResponse;
 use firestore_grpc::tonic::{self, metadata::MetadataValue, IntoStreamingRequest, Request};
 use firestore_grpc::v1::{
@@ -21,6 +20,7 @@ use super::collection::*;
 use super::conversion::IntoFirestoreDocumentValue;
 use super::structured_query::{OrderBuilder, StructuredQueryBuilder};
 use crate::firestore::client::get_client;
+use crate::FirestoreError;
 
 pub type UnaryFilterOperator = firestore::structured_query::unary_filter::Operator;
 pub type FieldFilterOperator = firestore::structured_query::field_filter::Operator;
@@ -158,7 +158,7 @@ impl ListenRequestBuilder {
 
     pub async fn build(
         &mut self,
-    ) -> Result<(CollectionStream<tonic::Status>, CollectionStreamController)> {
+    ) -> Result<(CollectionStream<tonic::Status>, CollectionStreamController), FirestoreError> {
         let (control_rx, controller) = CollectionStreamController::new();
         let token = self.client.get_token().await?;
         let req = self.build_req(control_rx);
@@ -171,7 +171,7 @@ impl ListenRequestBuilder {
     pub async fn build_retry(
         mut self,
         max_retry: u64,
-    ) -> Result<(CollectionStream, CollectionStreamController)> {
+    ) -> Result<(CollectionStream, CollectionStreamController), FirestoreError> {
         let (mut control_rx, controller) = CollectionStreamController::new();
 
         let stream = async_stream::stream! {
@@ -214,9 +214,7 @@ impl ListenRequestBuilder {
                                 > (restart_after_inactivity.as_secs() as i64 + thread_rng().gen_range(0..15))
                             {
                                 tracing::warn!("stream {:?} has had no updates for {}, restarting", self.collection, last_update_duration);
-                                if let Err(err) = current_controller.stop().await {
-                                    tracing::error!("Error sending stream stop {}", err);
-                                }
+                                current_controller.stop().await;
                                 break 'inner;
                             }
                         }
@@ -225,9 +223,7 @@ impl ListenRequestBuilder {
                             match msg {
                                 Some(StreamControlMessage::Stop) => {
                                     tracing::debug!("retriable collection stream received stop message");
-                                    if let Err(err) = current_controller.stop().await {
-                                        tracing::error!("Error sending stream stop {}", err);
-                                    }
+                                    current_controller.stop().await;
                                     break 'outer;
                                 },
                                 _ => {
@@ -361,13 +357,14 @@ impl CollectionStreamController {
         (rx, Self { control_tx })
     }
 
-    pub async fn stop(&self) -> Result<()> {
-        self.control_tx.send(StreamControlMessage::Stop).await?;
-        Ok(())
+    pub async fn stop(&self) {
+        if let Err(err) = self.control_tx.send(StreamControlMessage::Stop).await {
+            tracing::error!("Error sending stream stop {}", err);
+        }
     }
 }
 
-pub type CollectionStream<E = anyhow::Error> =
+pub type CollectionStream<E = FirestoreError> =
     Pin<Box<dyn Stream<Item = Result<CollectionUpdate, E>> + Send>>;
 
 pub struct CollectionStreamState {

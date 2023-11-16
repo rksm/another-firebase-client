@@ -1,4 +1,3 @@
-use anyhow::Result;
 use firebase_client_auth::{scopes, GoogleAuth, GoogleServiceAccount, ServiceAccountAuthorization};
 use firestore_grpc::google::firestore::v1::*;
 use firestore_grpc::tonic::codegen::InterceptedService;
@@ -16,6 +15,8 @@ use super::conversion::{IntoFirestoreDocument, IntoFirestoreDocumentValue};
 use super::structured_query::{self, StructuredQueryBuilder};
 use super::FromFirestoreDocument;
 
+use crate::FirestoreError;
+
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 const URL: &str = "https://firestore.googleapis.com";
@@ -27,6 +28,7 @@ pub(crate) async fn get_client(
     FirestoreClient<
         InterceptedService<Channel, impl FnMut(Request<()>) -> Result<Request<()>, Status>>,
     >,
+    FirestoreError,
 > {
     let auth_header = if let Some(token) = token {
         let bearer_token = format!("Bearer {}", token);
@@ -94,7 +96,7 @@ impl<'a> ListDocumentsOptions<'a> {
     }
 
     /// Returns pages of results
-    pub async fn fetch_all(mut self) -> Result<Vec<Document>> {
+    pub async fn fetch_all(mut self) -> Result<Vec<Document>, FirestoreError> {
         let mut result = Vec::new();
 
         let mut page = 0;
@@ -119,14 +121,14 @@ impl<'a> ListDocumentsOptions<'a> {
     }
 
     /// Returns documents of a single "page"
-    pub async fn fetch(&mut self) -> Result<Vec<Document>> {
+    pub async fn fetch(&mut self) -> Result<Vec<Document>, FirestoreError> {
         let res = self.fetch_page().await?;
         self.page_token = Some(res.next_page_token.to_string());
         Ok(res.documents)
     }
 
     /// Returns response of a single "page"
-    pub async fn fetch_page(&mut self) -> Result<ListDocumentsResponse> {
+    pub async fn fetch_page(&mut self) -> Result<ListDocumentsResponse, FirestoreError> {
         let Self {
             client,
             collection_id,
@@ -210,7 +212,7 @@ impl<'a> ListCollectionsOptions<'a> {
     }
 
     /// Returns pages of results
-    pub async fn fetch_all(mut self) -> Result<Vec<String>> {
+    pub async fn fetch_all(mut self) -> Result<Vec<String>, FirestoreError> {
         let mut result = Vec::new();
 
         let mut page = 0;
@@ -239,12 +241,12 @@ impl<'a> ListCollectionsOptions<'a> {
     }
 
     /// Returns documents of a single "page"
-    pub async fn fetch(mut self) -> Result<Vec<String>> {
+    pub async fn fetch(mut self) -> Result<Vec<String>, FirestoreError> {
         let res = self.fetch_page().await?;
         Ok(res.collection_ids)
     }
 
-    pub async fn fetch_page(&mut self) -> Result<ListCollectionIdsResponse> {
+    pub async fn fetch_page(&mut self) -> Result<ListCollectionIdsResponse, FirestoreError> {
         let Self {
             client,
             parent,
@@ -296,7 +298,7 @@ impl<'a> GetDocumentOptions<'a> {
         Self { client, name }
     }
 
-    pub async fn fetch(self) -> Result<Document> {
+    pub async fn fetch(self) -> Result<Document, FirestoreError> {
         let Self { client, name } = self;
         let token = client.get_token().await?;
         let project_id = &client.project_id;
@@ -331,7 +333,7 @@ impl<'a> DeleteDocumentOptions<'a> {
         Self { client, name }
     }
 
-    pub async fn fetch(self) -> Result<()> {
+    pub async fn fetch(self) -> Result<(), FirestoreError> {
         let Self { client, name } = self;
         let token = client.get_token().await?;
         let project_id = &client.project_id;
@@ -366,7 +368,9 @@ impl<'a> BatchGetDocumentOptions<'a> {
         Self { client, names }
     }
 
-    pub async fn fetch(self) -> Result<Vec<Result<BatchGetDocumentsResponse, Status>>> {
+    pub async fn fetch(
+        self,
+    ) -> Result<Vec<Result<BatchGetDocumentsResponse, Status>>, FirestoreError> {
         let Self { client, names } = self;
         let token = client.get_token().await?;
         let project_id = &client.project_id;
@@ -469,7 +473,7 @@ impl<'a> QueryOptions<'a> {
         self
     }
 
-    pub async fn fetch(self) -> Result<Vec<Document>> {
+    pub async fn fetch(self) -> Result<Vec<Document>, FirestoreError> {
         let responses = self.make_request().await?;
         let mut result = Vec::new();
 
@@ -495,7 +499,9 @@ impl<'a> QueryOptions<'a> {
         Ok(result)
     }
 
-    pub async fn make_request(self) -> Result<Vec<Result<RunQueryResponse, Status>>> {
+    pub async fn make_request(
+        self,
+    ) -> Result<Vec<Result<RunQueryResponse, Status>>, FirestoreError> {
         let Self {
             client,
             structured_query,
@@ -574,7 +580,7 @@ impl<'a> UpdateDocumentOptions<'a> {
         self
     }
 
-    pub async fn update(self) -> Result<Document> {
+    pub async fn update(self) -> Result<Document, FirestoreError> {
         let Self { document, client } = self;
         let token = client.get_token().await?;
 
@@ -592,7 +598,12 @@ impl<'a> UpdateDocumentOptions<'a> {
         let res = match res {
             Err(status) => {
                 let details = String::from_utf8_lossy(status.details());
-                return Err(anyhow::anyhow!("{} details: {}", status.message(), details));
+                tracing::error!(
+                    "error updating document: {} details: {}",
+                    status.message(),
+                    details
+                );
+                return Err(status.into());
             }
             Ok(res) => res,
         };
@@ -628,7 +639,7 @@ impl<'a> BatchUpdateDocumentOptions<'a> {
         self.updates.push(doc);
     }
 
-    pub async fn fetch(self) -> Result<Vec<BatchWriteResponse>> {
+    pub async fn fetch(self) -> Result<Vec<BatchWriteResponse>, FirestoreError> {
         let Self {
             client,
             updates,
@@ -711,7 +722,7 @@ impl FirebaseClient {
         FirebaseClient { project_id, auth }
     }
 
-    pub async fn get_token(&self) -> Result<Option<String>> {
+    pub async fn get_token(&self) -> Result<Option<String>, FirestoreError> {
         Ok(self.auth.get_token().await?)
     }
 
@@ -737,10 +748,10 @@ impl FirebaseClient {
         &self,
         col: impl AsRef<str>,
         id: impl AsRef<str>,
-    ) -> Result<T>
+    ) -> Result<T, FirestoreError>
     where
         T: FromFirestoreDocument,
-        T::Err: Into<anyhow::Error>,
+        T::Err: Into<FirestoreError>,
     {
         let col_name = col.as_ref();
         let id = id.as_ref();

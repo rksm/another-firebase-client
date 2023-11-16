@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use crate::FirestoreError;
 
 use super::{FirebaseClient, FromFirestoreDocument};
 
@@ -25,10 +25,10 @@ impl<'a> FetchAndUpdate<'a> {
         self
     }
 
-    pub async fn modify<T>(&self, modify_fn: impl FnOnce(&mut T)) -> Result<()>
+    pub async fn modify<T>(&self, modify_fn: impl FnOnce(&mut T)) -> Result<(), FirestoreError>
     where
         T: FromFirestoreDocument + serde::Serialize,
-        T::Err: Into<anyhow::Error>,
+        T::Err: Into<FirestoreError>,
     {
         let mut doc = self
             .client
@@ -38,7 +38,7 @@ impl<'a> FetchAndUpdate<'a> {
         self.store(doc).await
     }
 
-    pub async fn store<T>(&self, doc: T) -> Result<()>
+    pub async fn store<T>(&self, doc: T) -> Result<(), FirestoreError>
     where
         T: serde::Serialize,
     {
@@ -49,8 +49,10 @@ impl<'a> FetchAndUpdate<'a> {
             add_updated_timestamp,
         } = self;
 
-        let mut doc = serde_json::to_value(doc)
-            .map_err(|e| anyhow!("unable to serialize transcription doc: {}", e))?;
+        let mut doc = serde_json::to_value(doc).map_err(|e| {
+            tracing::error!("unable to serialize transcription doc: {}", e);
+            e
+        })?;
 
         if let Some(add_updated_timestamp) = add_updated_timestamp {
             // FIXME better have a trait for this with T?

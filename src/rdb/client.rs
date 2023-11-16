@@ -1,6 +1,8 @@
-use anyhow::Result;
 use firebase_client_auth::{scopes, GoogleAuth, GoogleServiceAccount, ServiceAccountAuthorization};
-use reqwest::{Body, Method, Response, Url};
+use reqwest::{Body, Method, Response};
+use url::Url;
+
+use crate::RealtimeDBError;
 
 pub struct RdbClient {
     pub auth: GoogleAuth,
@@ -13,7 +15,7 @@ pub struct PostResult {
 }
 
 impl RdbClient {
-    pub fn for_account(account: GoogleServiceAccount) -> Result<Self> {
+    pub fn for_account(account: GoogleServiceAccount) -> Result<Self, RealtimeDBError> {
         let auth = Box::new(ServiceAccountAuthorization::with_account_and_scope(
             account,
             &[scopes::AUTH_DATASTORE, scopes::AUTH_USERINFO_EMAIL],
@@ -43,7 +45,7 @@ impl RdbClient {
         path: S,
         body: Option<T>,
         params: Option<&[&str]>,
-    ) -> Result<Response> {
+    ) -> Result<Response, RealtimeDBError> {
         let url = format!("https://{}.firebaseio.com/", self.project_id());
         let mut url = Url::parse(&url)?.join(path.as_ref())?;
         if let Some(params) = params {
@@ -67,21 +69,29 @@ impl RdbClient {
         self.check_status(path, client.send().await?).await
     }
 
-    async fn check_status<S: AsRef<str>>(&self, path: S, res: Response) -> Result<Response> {
+    async fn check_status<S: AsRef<str>>(
+        &self,
+        path: S,
+        res: Response,
+    ) -> Result<Response, RealtimeDBError> {
         let status = res.status();
         if status.is_success() {
             return Ok(res);
         }
         let message = res.text().await.unwrap_or_else(|_| String::new());
-        Err(anyhow::anyhow!(
+        tracing::error!(
             "Error putting {}:\nStatus={}\nmessage={}",
             path.as_ref(),
             status,
             message
-        ))
+        );
+        Err(RealtimeDBError::RequestFailure(status, message))
     }
 
-    pub async fn get_path<T: serde::de::DeserializeOwned>(&mut self, path: &str) -> Result<T> {
+    pub async fn get_path<T: serde::de::DeserializeOwned>(
+        &mut self,
+        path: &str,
+    ) -> Result<T, RealtimeDBError> {
         let params = if self.shallow {
             Some(["shallow=true"].as_slice())
         } else {
@@ -97,7 +107,7 @@ impl RdbClient {
         &mut self,
         path: &str,
         value: &T,
-    ) -> Result<()> {
+    ) -> Result<(), RealtimeDBError> {
         let data = serde_json::to_string(value)?;
         self.make_request(Method::PUT, path, Some(data), None)
             .await?;
@@ -108,7 +118,7 @@ impl RdbClient {
         &mut self,
         path: &str,
         value: &T,
-    ) -> Result<()> {
+    ) -> Result<(), RealtimeDBError> {
         let data = serde_json::to_string(value)?;
         self.make_request(Method::PATCH, path, Some(data), None)
             .await?;
@@ -119,7 +129,7 @@ impl RdbClient {
         &mut self,
         path: &str,
         value: &T,
-    ) -> Result<PostResult> {
+    ) -> Result<PostResult, RealtimeDBError> {
         let data = serde_json::to_string(value)?;
         let res = self
             .make_request(Method::POST, path, Some(data), None)
@@ -127,7 +137,7 @@ impl RdbClient {
         Ok(res.json::<PostResult>().await?)
     }
 
-    pub async fn delete_path(&mut self, path: &str) -> Result<()> {
+    pub async fn delete_path(&mut self, path: &str) -> Result<(), RealtimeDBError> {
         self.make_request::<&str, _>(Method::DELETE, path, None, None)
             .await?;
         Ok(())

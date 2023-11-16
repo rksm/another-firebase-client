@@ -1,5 +1,6 @@
+use crate::RealtimeDBError;
+
 use super::{listener_updates::*, RdbClient};
-use anyhow::Result;
 use es::Client;
 use eventsource_client as es;
 use futures::{Stream, TryStreamExt};
@@ -48,7 +49,7 @@ impl Listener {
         pub fn apply_action(
             action: Action,
             value: ObservedValue,
-        ) -> Result<(Vec<String>, ObservedValue)> {
+        ) -> Result<(Vec<String>, ObservedValue), RealtimeDBError> {
             tracing::trace!("applying action {:?}", action);
             let (path, val) = match action {
                 Action::Put(action) => value.apply_put(action)?,
@@ -115,23 +116,26 @@ impl Listener {
                         .send((changed_path, value.clone()))
                         .await
                     {
-                        eprintln!("Error sending rdb update {}", err);
+                        tracing::error!("Error sending rdb update {}", err);
                     }
                 }
 
-                match task.await? {
+                match task.await {
+                    Err(err) => {
+                        tracing::error!("Error joining stream task: {err}");
+                    }
+                    Ok(Err(err)) => {
+                        tracing::error!("Error receiving updates {:?}", err);
+                    }
                     Ok(_) => {
                         break;
-                    }
-                    Err(err) => {
-                        eprintln!("Error receiving updates {:?}", err);
                     }
                 };
             }
 
             tracing::debug!("stopped streaming {}", url);
 
-            Result::<()>::Ok(())
+            Result::<(), RealtimeDBError>::Ok(())
         });
 
         change_rx
@@ -180,11 +184,11 @@ fn start_http_connection(
                 msg = rx.recv() => {
                     match msg {
                         Some(RdbControlMessage::Stop) => {
-                            eprintln!("received stop message");
+                            tracing::info!("received stop message");
                             break;
                         },
                         None => {
-                            eprintln!("rdb stream control channel closed, exiting");
+                            tracing::info!("rdb stream control channel closed, exiting");
                             break;
                         }
                     }
@@ -196,7 +200,7 @@ fn start_http_connection(
                             match event {
                                 es::SSE::Event(event) => {
                                     if let Err(err) = tx.send(event.clone()).await {
-                                        eprintln!("error sending event from sse stream: {}", err);
+                                        tracing::error!("error sending event from sse stream: {}", err);
                                     };
 
                                 }
