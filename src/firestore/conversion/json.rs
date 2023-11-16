@@ -180,9 +180,9 @@ impl IntoFirestoreDocument for Value {
         let name = if let Value::String(name) = self["name"].clone() {
             name
         } else {
-            return Err(FirestoreConversionError::IntoFirestoreError(format!(
-                "name is not a string"
-            )));
+            return Err(FirestoreConversionError::IntoFirestoreError(
+                "name is not a string".to_string(),
+            ));
         };
         let fields = if let Some(value @ Value::Object(..)) = self.get_mut("fields") {
             value
@@ -190,9 +190,9 @@ impl IntoFirestoreDocument for Value {
                 .into_document_from_fields()
                 .map(|doc| doc.fields)?
         } else {
-            return Err(FirestoreConversionError::IntoFirestoreError(format!(
-                "fields is not an object"
-            )));
+            return Err(FirestoreConversionError::IntoFirestoreError(
+                "fields is not an object".to_string(),
+            ));
         };
         let create_time = match self.get("create_time") {
             Some(Value::Number(millis)) if millis.as_u64().is_some() => {
