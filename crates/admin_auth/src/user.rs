@@ -47,7 +47,7 @@ pub struct RegisteredUser {
 
 mod timestamp_serialization {
     use chrono::{DateTime, TimeZone, Utc};
-    use serde::{self, Deserialize, Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer};
 
     // serialize to milliseconds since the epoch
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
@@ -73,7 +73,7 @@ mod timestamp_serialization {
 
 mod timestamp_serialization_opt {
     use chrono::{DateTime, TimeZone, Utc};
-    use serde::{self, Deserialize, Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer};
 
     // serialize to milliseconds since the epoch
     pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
