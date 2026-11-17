@@ -263,7 +263,9 @@ impl ListenRequestBuilder {
                                 Some(Ok(update)) => {
                                     last_update = Utc::now();
                                     retry_count = 0;
-                                    self.resume_token = Some(update.resume_token.clone());
+                                    if !update.resume_token.is_empty() {
+                                        self.resume_token = Some(update.resume_token.clone());
+                                    }
                                     yield Ok(update);
                                 }
                             }
@@ -409,14 +411,12 @@ impl CollectionStreamState {
     }
 
     fn next_update(&mut self, change: TargetChange, force: bool) -> Option<CollectionUpdate> {
-        if self.changes.is_empty() {
-            return if force {
-                Some(CollectionUpdate::default())
-            } else {
-                None
-            };
+        if self.changes.is_empty() && !force {
+            return None;
         }
 
+        // Even without changes, the update carries the resume token. An empty
+        // token would make the next restart read the whole collection again.
         Some(CollectionUpdate {
             changes: self.changes.drain(..).collect(),
             documents: std::mem::take(&mut self.documents),
@@ -512,5 +512,31 @@ impl CollectionStreamState {
         };
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_without_changes_keeps_resume_token() {
+        let mut state = CollectionStreamState {
+            target_ids: Default::default(),
+            documents: HashMap::new(),
+            changes: Vec::new(),
+        };
+        let current = ListenResponse {
+            response_type: Some(ResponseType::TargetChange(TargetChange {
+                target_change_type: TargetChangeType::Current as i32,
+                resume_token: b"token".to_vec(),
+                ..Default::default()
+            })),
+        };
+
+        let update = state.handle_listen_response(current).expect("update");
+
+        assert!(update.documents.is_empty());
+        assert_eq!(update.resume_token, b"token");
     }
 }
