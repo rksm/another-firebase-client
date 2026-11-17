@@ -32,6 +32,9 @@ pub type CompositeFilterOperator = firestore::structured_query::composite_filter
 // "Rust".as_bytes().iter().rev().enumerate().map(|(i, b)| ((*b) as i32) << (8 * i)).sum();
 static GRPC_TARGET_ID: i32 = 0x52757374;
 
+/// How long `build_retry` waits for a (re)connect before it retries.
+const BUILD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub struct ListenRequestBuilder {
     client: super::FirebaseClient,
     collection: String,
@@ -185,9 +188,16 @@ impl ListenRequestBuilder {
                     tokio::time::sleep(std::time::Duration::from_secs(retry_count)).await;
                 }
 
-                let (mut stream, current_controller) = match self.build().await {
+                // Getting a token, connecting and sending the listen request
+                // have no timeout of their own. Without this, a reconnect once
+                // hung for weeks and the stream never yielded again.
+                let built = tokio::time::timeout(BUILD_TIMEOUT, self.build())
+                    .await
+                    .unwrap_or_else(|elapsed| Err(elapsed.into()));
+                let (mut stream, current_controller) = match built {
                     Err(err) if retry_count < max_retry => {
                         tracing::warn!("sending streaming request for {:?} errored, retrying ({})", self.collection, err);
+                        retry_count += 1;
                         continue;
                     }
                     Err(err) => {
