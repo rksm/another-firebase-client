@@ -245,7 +245,7 @@ impl ListenRequestBuilder {
                         item = stream.next() => {
                             match item {
                                 None => {
-                                    tracing::debug!("retriable collection stream for {:?}: stream stopped", self.collection);
+                                    tracing::warn!("retriable collection stream for {:?}: stream stopped", self.collection);
                                     // Back off before reconnecting, so that a server that keeps
                                     // closing the stream does not cause a reconnect loop. The next
                                     // update resets the count.
@@ -254,7 +254,7 @@ impl ListenRequestBuilder {
                                 },
                                 Some(Err(err)) => {
                                     if retry_count < max_retry {
-                                        eprintln!(
+                                        tracing::warn!(
                                             "Error receiving collection stream {:?}, retrying attempt {}: {}",
                                             self.collection, retry_count, err
                                         );
