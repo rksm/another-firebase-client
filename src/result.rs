@@ -19,6 +19,9 @@ pub enum FirestoreError {
 
     #[error("Conversion error: {0}")]
     ConversionError(#[from] FirestoreConversionError),
+
+    #[error("Timed out: {0}")]
+    Timeout(#[from] tokio::time::error::Elapsed),
 }
 
 #[derive(thiserror::Error, Debug)]
