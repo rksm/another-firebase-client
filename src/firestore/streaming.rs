@@ -246,6 +246,10 @@ impl ListenRequestBuilder {
                             match item {
                                 None => {
                                     tracing::debug!("retriable collection stream for {:?}: stream stopped", self.collection);
+                                    // Back off before reconnecting, so that a server that keeps
+                                    // closing the stream does not cause a reconnect loop. The next
+                                    // update resets the count.
+                                    retry_count += 1;
                                     break 'inner;
                                 },
                                 Some(Err(err)) => {
